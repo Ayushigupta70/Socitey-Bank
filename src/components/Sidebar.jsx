@@ -72,6 +72,7 @@ const menu = [
   {
     label: 'Members', icon: <PeopleIcon />,
     children: [
+      { to: '/members', label: 'Member Details' },
       { to: '/familymember', label: 'Family Members' }
     ]
   },
