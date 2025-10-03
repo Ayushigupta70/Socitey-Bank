@@ -34,6 +34,10 @@ export default function ApprovalWorkflow() {
                 ...loan,
                 memberId: m.memberId,
                 memberName: m.name,
+                mobile: m.mobile || "-",
+                email: m.email || "-",
+                age: m.age || "-",
+                maritalStatus: m.maritalStatus || "-",
                 status: loan.status || "pending",
             }))
         );
@@ -101,25 +105,16 @@ export default function ApprovalWorkflow() {
     const filteredLoans = filter === "all" ? loans : loans.filter((loan) => loan.status === filter);
 
     return (
-        <Container maxWidth="lg" sx={{ mt: 4 }}>
-            <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>
-                Loan Approval Workflow
-            </Typography>
+        <Container maxWidth="xl" sx={{ mt: 4 }}>
+            <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>Loan Approval Workflow</Typography>
 
-            {/* Filter buttons */}
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
                 {["all", "pending", "approved", "rejected"].map((f) => (
                     <Button
                         key={f}
                         variant={filter === f ? "contained" : "outlined"}
                         color={
-                            f === "approved"
-                                ? "success"
-                                : f === "rejected"
-                                    ? "error"
-                                    : f === "pending"
-                                        ? "warning"
-                                        : "primary"
+                            f === "approved" ? "success" : f === "rejected" ? "error" : f === "pending" ? "warning" : "primary"
                         }
                         onClick={() => setFilter(f)}
                         size="small"
@@ -129,42 +124,46 @@ export default function ApprovalWorkflow() {
                 ))}
             </Stack>
 
-            <Paper sx={{ p: 1.5, borderRadius: 3, boxShadow: 3 }}>
+            <Paper sx={{ p: 2, borderRadius: 3, boxShadow: 4 }}>
                 <Table>
                     <TableHead sx={{ backgroundColor: "#283593" }}>
                         <TableRow>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Loan ID</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Member</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Loan</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Principal</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Interest (%)</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Tenure</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>EMI</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Total Payable</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Status</TableCell>
-                            <TableCell sx={{ color: "white", fontSize: "0.875rem" }}>Actions</TableCell>
+                            <TableCell sx={{ color: "white" }}>Loan ID</TableCell>
+                            <TableCell sx={{ color: "white" }}>Member</TableCell>
+                            <TableCell sx={{ color: "white" }}>Mobile</TableCell>
+                            <TableCell sx={{ color: "white" }}>Email</TableCell>
+                            <TableCell sx={{ color: "white" }}>Age</TableCell>
+                            <TableCell sx={{ color: "white" }}>Marital Status</TableCell>
+                            <TableCell sx={{ color: "white" }}>Loan Purpose</TableCell>
+                            <TableCell sx={{ color: "white" }}>Principal (₹)</TableCell>
+                            <TableCell sx={{ color: "white" }}>Interest (%)</TableCell>
+                            <TableCell sx={{ color: "white" }}>Tenure (Months)</TableCell>
+                            <TableCell sx={{ color: "white" }}>EMI (₹)</TableCell>
+                            <TableCell sx={{ color: "white" }}>Total Payable (₹)</TableCell>
+                            <TableCell sx={{ color: "white" }}>Status</TableCell>
+                            <TableCell sx={{ color: "white" }}>Actions</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
                         {filteredLoans.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={10} align="center" sx={{ fontSize: "0.875rem" }}>
-                                    No loan applications found.
-                                </TableCell>
+                                <TableCell colSpan={14} align="center">No loan applications found.</TableCell>
                             </TableRow>
                         ) : (
                             filteredLoans.map((loan) => (
-                                <TableRow key={loan.loanId} sx={{ ...getRowStyle(loan.status) }}>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>{loan.loanId}</TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>
-                                        {loan.memberName} ({loan.memberId})
-                                    </TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>{loan.product}</TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>₹{loan.principal}</TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>{loan.interest}</TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>{loan.tenureMonths}</TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>₹{loan.emi}</TableCell>
-                                    <TableCell sx={{ fontSize: "0.85rem" }}>₹{loan.totalPayable}</TableCell>
+                                <TableRow key={loan.loanId} sx={getRowStyle(loan.status)}>
+                                    <TableCell>{loan.loanId}</TableCell>
+                                    <TableCell>{loan.memberName} ({loan.memberId})</TableCell>
+                                    <TableCell>{loan.mobile}</TableCell>
+                                    <TableCell>{loan.email}</TableCell>
+                                    <TableCell>{loan.age}</TableCell>
+                                    <TableCell>{loan.maritalStatus}</TableCell>
+                                    <TableCell>{loan.product}</TableCell>
+                                    <TableCell>₹{loan.principal}</TableCell>
+                                    <TableCell>{loan.interest}</TableCell>
+                                    <TableCell>{loan.tenureMonths}</TableCell>
+                                    <TableCell>₹{loan.emi}</TableCell>
+                                    <TableCell>₹{loan.totalPayable}</TableCell>
                                     <TableCell>{getStatusChip(loan.status)}</TableCell>
                                     <TableCell>
                                         {loan.status === "pending" ? (
@@ -182,9 +181,7 @@ export default function ApprovalWorkflow() {
                                                 </Menu>
                                             </>
                                         ) : (
-                                            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
-                                                Actions not available
-                                            </Typography>
+                                            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>No Actions</Typography>
                                         )}
                                     </TableCell>
                                 </TableRow>

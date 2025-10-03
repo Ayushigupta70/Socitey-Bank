@@ -86,6 +86,7 @@ const menu = [
       { to: '/approvalloan', label: 'Loan Status' }
     ]
   },
+  { to: '/guarantor', label: 'Guarantor', icon: <PeopleIcon /> },
   { to: '/reports', label: 'Reports', icon: <AssessmentIcon /> }
 ];
 

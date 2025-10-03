@@ -16,6 +16,7 @@ import AddMember from './pages/AddMember.jsx'
 import Transaction from "./pages/Transaction";
 import ApprovalWorkflow from "./pages/ApprovalLoan";
 import FamilyMember from "./pages/FamilyMember";
+import Guarantor from "./pages/Guarantor.jsx";
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [credentials, setCredentials] = useState(null);
@@ -61,6 +62,7 @@ export default function App() {
                       <Route path="/members" element={<Members />} />
                       <Route path="/familymember" element={<FamilyMember />}></Route>
                       <Route path="/addmember" element={<AddMember />} />
+                      <Route path="/guarantor" element={<Guarantor />}></Route>
                       <Route path="/transaction" element={<Transaction />} />
                       <Route path="/approvalloan" element={<ApprovalWorkflow />}></Route>
                       <Route path="*" element={<Navigate to="/" />} />
