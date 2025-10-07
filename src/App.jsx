@@ -12,11 +12,11 @@ import Loans from "./pages/Loans";
 import Reports from "./pages/Reports";
 import Login from "./pages/Login";
 import Members from "./pages/Members";
-import AddMember from './pages/AddMember.jsx'
 import Transaction from "./pages/Transaction";
 import ApprovalWorkflow from "./pages/ApprovalLoan";
 import FamilyMember from "./pages/FamilyMember";
 import Guarantor from "./pages/Guarantor.jsx";
+import Cases from "./pages/Cases.jsx";
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [credentials, setCredentials] = useState(null);
@@ -61,9 +61,9 @@ export default function App() {
                       <Route path="/reports" element={<Reports />} />
                       <Route path="/members" element={<Members />} />
                       <Route path="/familymember" element={<FamilyMember />}></Route>
-                      <Route path="/addmember" element={<AddMember />} />
                       <Route path="/guarantor" element={<Guarantor />}></Route>
                       <Route path="/transaction" element={<Transaction />} />
+                      <Route path="/cases" element={<Cases />} />
                       <Route path="/approvalloan" element={<ApprovalWorkflow />}></Route>
                       <Route path="*" element={<Navigate to="/" />} />
                     </Routes>

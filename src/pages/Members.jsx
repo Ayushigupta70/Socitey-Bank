@@ -1,4 +1,3 @@
-// src/pages/Members.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -6,13 +5,10 @@ import {
   Typography,
   TextField,
   Button,
-  Grid,
-  Avatar,
   Chip,
   FormControl,
   InputLabel,
   Select,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
@@ -21,17 +17,24 @@ import {
   TableRow,
   TablePagination,
   InputAdornment,
-  Card,
-  CardContent,
-  Stepper,
-  Step,
-  StepLabel,
   Tabs,
   Snackbar,
   Alert,
   CircularProgress,
-  Tab
+  Tab,
+  Container,
+  Stepper,
+  Step,
+  StepLabel,
+  MenuItem,
+  Avatar,
+  IconButton,
+  Card,
+  CardContent,
+  Divider,
+  Grid
 } from '@mui/material';
+import { PhotoCamera } from "@mui/icons-material";
 import {
   Search,
   Add,
@@ -112,6 +115,53 @@ function TabPanel({ children, value, index, ...other }) {
   );
 }
 
+// Enhanced localStorage utility functions
+const localStorageKeys = {
+  MEMBERS: 'society_members_data',
+  REGISTRATION_FORM: 'member_registration_form_data',
+  APP_SETTINGS: 'society_app_settings'
+};
+
+const getFromLocalStorage = (key, defaultValue = null) => {
+  try {
+    if (typeof window === 'undefined') return defaultValue;
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch (error) {
+    console.error(`Error reading from localStorage key "${key}":`, error);
+    return defaultValue;
+  }
+};
+
+const saveToLocalStorage = (key, data) => {
+  try {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (error) {
+    console.error(`Error saving to localStorage key "${key}":`, error);
+  }
+};
+
+const removeFromLocalStorage = (key) => {
+  try {
+    if (typeof window === 'undefined') return;
+    localStorage.removeItem(key);
+  } catch (error) {
+    console.error(`Error removing from localStorage key "${key}":`, error);
+  }
+};
+
+const clearAllLocalStorage = () => {
+  try {
+    if (typeof window === 'undefined') return;
+    Object.values(localStorageKeys).forEach(key => {
+      localStorage.removeItem(key);
+    });
+  } catch (error) {
+    console.error('Error clearing localStorage:', error);
+  }
+};
+
 export default function Members() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -123,37 +173,52 @@ export default function Members() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [activeStep, setActiveStep] = useState(0);
 
+  // Save members to localStorage whenever members state changes
   useEffect(() => {
-    fetchMembers();
-  }, []);
+    if (members.length > 0 && !loading) {
+      saveToLocalStorage(localStorageKeys.MEMBERS, members);
+      console.log('Members data saved to localStorage:', members.length, 'members');
+    }
+  }, [members, loading]);
 
-  const fetchMembers = () => {
-    setLoading(true);
-    setTimeout(() => {
-      // Add membershipFee field to each member since your JSON doesn't have it
-      const membersWithFees = membersData.map(member => ({
-        ...member,
-        membershipFee: {
-          paid: Math.random() > 0.3, // Randomize for demo (70% paid)
-          amount: 1000,
-          dueDate: "2025-12-31",
-          lastPaymentDate: member.joinedAt
-        }
-      }));
-      
-      setMembers(membersWithFees);
-      setLoading(false);
-    }, 500);
-  };
+  // Load initial data on component mount
+  useEffect(() => {
+    const initializeData = () => {
+      const savedMembers = getFromLocalStorage(localStorageKeys.MEMBERS);
+
+      if (savedMembers && savedMembers.length > 0) {
+        setMembers(savedMembers);
+        setLoading(false);
+        console.log('Loaded from localStorage:', savedMembers.length, 'members');
+      } else {
+        // Load from JSON and initialize
+        const membersWithFees = membersData.map(member => ({
+          ...member,
+          membershipFee: {
+            paid: Math.random() > 0.3,
+            amount: 1000,
+            dueDate: "2025-12-31",
+            lastPaymentDate: member.joinedAt
+          }
+        }));
+
+        setMembers(membersWithFees);
+        saveToLocalStorage(localStorageKeys.MEMBERS, membersWithFees);
+        setLoading(false);
+        console.log('Initialized new data:', membersWithFees.length, 'members');
+      }
+    };
+
+    initializeData();
+  }, []);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
   };
 
   const handleAddMember = (memberData) => {
-    // Generate a unique member ID
     const newMemberId = `MEM${String(members.length + 1).padStart(4, '0')}`;
-    
+
     const newMember = {
       _id: `member-${Date.now()}`,
       memberId: newMemberId,
@@ -172,49 +237,108 @@ export default function Members() {
       membershipFee: {
         paid: false,
         amount: 1000,
-        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         lastPaymentDate: null
       }
     };
 
-    setMembers(prev => [newMember, ...prev]);
+    const updatedMembers = [newMember, ...members];
+    setMembers(updatedMembers);
     setSnackbar({ open: true, message: 'Member registered successfully', severity: 'success' });
-    setTabValue(0); // Switch to All Members tab
+    setTabValue(0);
   };
 
   const handleKYCUpload = (memberId, kycData) => {
-    setMembers(prev => prev.map(member => 
-      member._id === memberId 
-        ? { 
-            ...member, 
-            kyc: { ...member.kyc, ...kycData, verified: true },
-            status: 'active' // Automatically activate member after KYC verification
-          } 
+    const updatedMembers = members.map(member =>
+      member._id === memberId
+        ? {
+          ...member,
+          kyc: { ...member.kyc, ...kycData, verified: true },
+          status: 'active'
+        }
         : member
-    ));
+    );
+    setMembers(updatedMembers);
     setSnackbar({ open: true, message: 'KYC documents uploaded successfully', severity: 'success' });
   };
 
   const handleFeeCollection = (memberId, feeData) => {
-    setMembers(prev => prev.map(member => 
-      member._id === memberId 
-        ? { 
-            ...member, 
-            membershipFee: { 
-              ...member.membershipFee, 
-              paid: true,
-              lastPaymentDate: new Date().toISOString()
-            }
-          } 
+    const updatedMembers = members.map(member =>
+      member._id === memberId
+        ? {
+          ...member,
+          membershipFee: {
+            ...member.membershipFee,
+            paid: true,
+            lastPaymentDate: new Date().toISOString()
+          }
+        }
         : member
-    ));
+    );
+    setMembers(updatedMembers);
     setSnackbar({ open: true, message: 'Membership fee collected successfully', severity: 'success' });
+  };
+
+  // Data export functionality
+  const exportData = () => {
+    const dataToExport = {
+      members: members,
+      exportedAt: new Date().toISOString(),
+      version: '1.0'
+    };
+
+    const dataStr = JSON.stringify(dataToExport, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `society-members-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+
+    setSnackbar({ open: true, message: 'Data exported successfully', severity: 'success' });
+  };
+
+  // Data import functionality
+  const importData = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result);
+
+        if (importedData.members && Array.isArray(importedData.members)) {
+          setMembers(importedData.members);
+          saveToLocalStorage(localStorageKeys.MEMBERS, importedData.members);
+          setSnackbar({ open: true, message: 'Data imported successfully', severity: 'success' });
+        } else {
+          setSnackbar({ open: true, message: 'Invalid data format', severity: 'error' });
+        }
+      } catch (error) {
+        setSnackbar({ open: true, message: 'Error importing data', severity: 'error' });
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset the input
+    event.target.value = '';
+  };
+
+  // Clear all data
+  const clearAllData = () => {
+    clearAllLocalStorage();
+    setMembers([]);
+    setSnackbar({ open: true, message: 'All data cleared successfully', severity: 'info' });
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          member.memberId.toLowerCase().includes(searchTerm.toLowerCase());
+      member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.memberId.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -230,13 +354,45 @@ export default function Members() {
   return (
     <Box sx={{ p: 3 }}>
       {/* Header Section */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-          Members Management
-        </Typography>
-        <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-          Manage society members, KYC verification, and membership fees
-        </Typography>
+      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            Members Management
+          </Typography>
+          <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+            Manage society members, KYC verification, and membership fees
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            variant="outlined"
+            onClick={exportData}
+            size="small"
+          >
+            Export Data
+          </Button>
+          <Button
+            variant="outlined"
+            component="label"
+            size="small"
+          >
+            Import Data
+            <input
+              type="file"
+              hidden
+              accept=".json"
+              onChange={importData}
+            />
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            onClick={clearAllData}
+            size="small"
+          >
+            Clear All Data
+          </Button>
+        </Box>
       </Box>
 
       {/* Statistics Cards */}
@@ -293,6 +449,16 @@ export default function Members() {
         </Grid>
       </Grid>
 
+      {/* Debug Information */}
+      {process.env.NODE_ENV === 'development' && (
+        <Box sx={{ mt: 2, p: 2, background: '#f5f5f5', borderRadius: 1, mb: 2 }}>
+          <Typography variant="caption">
+            Debug: {members.length} members in state |
+            LocalStorage: {getFromLocalStorage(localStorageKeys.MEMBERS)?.length || 0} members
+          </Typography>
+        </Box>
+      )}
+
       {/* Module Tabs */}
       <StyledPaper>
         <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -317,17 +483,18 @@ export default function Members() {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <MemberRegistration 
-            onAddMember={handleAddMember} 
-            activeStep={activeStep} 
-            setActiveStep={setActiveStep} 
+          <MemberRegistration
+            onAddMember={handleAddMember}
+            activeStep={activeStep}
+            setActiveStep={setActiveStep}
+            members={members}
           />
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <FeeCollection 
-            members={members.filter(m => !m.membershipFee.paid)} 
-            onCollectFee={handleFeeCollection} 
+          <FeeCollection
+            members={members.filter(m => !m.membershipFee.paid)}
+            onCollectFee={handleFeeCollection}
           />
         </TabPanel>
 
@@ -352,16 +519,11 @@ export default function Members() {
 // Member List View Component
 function MemberListView({ members, searchTerm, setSearchTerm, statusFilter, setStatusFilter, page, setPage, rowsPerPage, setRowsPerPage }) {
   const handleChangePage = (event, newPage) => setPage(newPage);
-  
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
   };
-
-  const navigate = useNavigate();
-  const handleNewMemberClick = () =>{
-    navigate('/addmember');
-  }
 
   return (
     <>
@@ -373,19 +535,19 @@ function MemberListView({ members, searchTerm, setSearchTerm, statusFilter, setS
           placeholder="Search by name, email, or member ID..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{ 
+          InputProps={{
             startAdornment: (
               <InputAdornment position="start">
                 <Search />
               </InputAdornment>
-            ) 
+            )
           }}
           sx={{ minWidth: 300, flex: 1 }}
         />
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Status</InputLabel>
-          <Select 
-            value={statusFilter} 
+          <Select
+            value={statusFilter}
             label="Status"
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -396,10 +558,6 @@ function MemberListView({ members, searchTerm, setSearchTerm, statusFilter, setS
             <MenuItem value="pending">Pending</MenuItem>
           </Select>
         </FormControl>
-
-        <Button variant='contained' onClick={handleNewMemberClick} sx={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
-          Add Member
-        </Button>
       </Box>
 
       <TableContainer>
@@ -441,15 +599,15 @@ function MemberListView({ members, searchTerm, setSearchTerm, statusFilter, setS
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <KYCStatusChip 
-                    label={member.kyc.verified ? "Verified" : "Pending"} 
+                  <KYCStatusChip
+                    label={member.kyc.verified ? "Verified" : "Pending"}
                     verified={member.kyc.verified}
-                    size="small" 
+                    size="small"
                   />
                 </TableCell>
                 <TableCell>
-                  <Chip 
-                    label={member.membershipFee.paid ? "Paid" : "Due"} 
+                  <Chip
+                    label={member.membershipFee.paid ? "Paid" : "Due"}
                     color={member.membershipFee.paid ? "success" : "error"}
                     size="small"
                   />
@@ -478,241 +636,422 @@ function MemberListView({ members, searchTerm, setSearchTerm, statusFilter, setS
   );
 }
 
-// Member Registration Component
-function MemberRegistration({ onAddMember, activeStep, setActiveStep }) {
-  const [memberData, setMemberData] = useState({
-    name: '',
-    email: '',
-    mobile: '',
-    dob: '',
-    address: { street: '', city: '', state: '', pincode: '', country: 'India' },
-    kyc: { aadhar: '', pan: '' },
-    uploadedDocuments: []
-  });
+// Member Registration Component with localStorage for form data
+const steps = ["Personal Info", "Contact & Address", "Documents", "Preview & Submit"];
+function MemberRegistration({ onAddMember, activeStep, setActiveStep, members }) {
+  const [photo, setPhoto] = useState(null);
+  const [selectedMember, setSelectedMember] = useState("");
 
-  const [documentFiles, setDocumentFiles] = useState([]);
+  // Load form data from localStorage or use default empty values
+  const [formData, setFormData] = useState(() =>
+    getFromLocalStorage(localStorageKeys.REGISTRATION_FORM, {
+      applicantName: "",
+      fatherHusbandName: "",
+      motherName: "",
+      dob: "",
+      age: "",
+      gender: "",
+      maritalStatus: "",
+      monthlyIncome: "",
+      occupation: "",
+      residenceType: "",
+      correspondenceAddress: "",
+      permanentAddress: "",
+      contact: "",
+      email: "",
+      pan: "",
+      aadhar: "",
+    })
+  );
 
-  const steps = ['Basic Information', 'Address Details', 'KYC Documents', 'Review & Submit'];
+  // Save form data to localStorage whenever it changes
+  useEffect(() => {
+    saveToLocalStorage(localStorageKeys.REGISTRATION_FORM, formData);
+  }, [formData]);
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handlePhotoUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setPhoto(URL.createObjectURL(file));
+    }
+  };
+
+  const handleMemberChange = (e) => {
+    const memberId = e.target.value;
+    setSelectedMember(memberId);
+    const member = members.find((m) => m.memberId === memberId);
+    if (member) {
+      setFormData(prev => ({
+        ...prev,
+        applicantName: member.name,
+        contact: member.mobile || "",
+        email: member.email || "",
+        correspondenceAddress: member.address ? `${member.address.street}, ${member.address.city}` : "",
+        permanentAddress: member.address ? `${member.address.street}, ${member.address.city}` : "",
+      }));
+    }
+  };
 
   const handleNext = () => {
-    if (activeStep === 0 && (!memberData.name || !memberData.email || !memberData.mobile)) {
-      alert('Please fill all required fields');
-      return;
+    if (activeStep < steps.length - 1) {
+      setActiveStep(activeStep + 1);
+    } else {
+      // Submit the form
+      const newMemberData = {
+        name: formData.applicantName,
+        email: formData.email,
+        mobile: formData.contact,
+        dob: formData.dob,
+        address: {
+          street: formData.correspondenceAddress.split(',')[0]?.trim() || '',
+          city: formData.correspondenceAddress.split(',')[1]?.trim() || '',
+          state: '',
+          pincode: ''
+        },
+        kyc: {
+          aadhar: formData.aadhar,
+          pan: formData.pan,
+          verified: false,
+          documents: []
+        }
+      };
+
+      onAddMember(newMemberData);
+
+      // Clear form data from localStorage after successful submission
+      removeFromLocalStorage(localStorageKeys.REGISTRATION_FORM);
+
+      // Reset form
+      setFormData({
+        applicantName: "",
+        fatherHusbandName: "",
+        motherName: "",
+        dob: "",
+        age: "",
+        gender: "",
+        maritalStatus: "",
+        monthlyIncome: "",
+        occupation: "",
+        residenceType: "",
+        correspondenceAddress: "",
+        permanentAddress: "",
+        contact: "",
+        email: "",
+        pan: "",
+        aadhar: "",
+      });
+      setSelectedMember("");
+      setPhoto(null);
+      setActiveStep(0);
     }
-    if (activeStep === 1 && (!memberData.address.street || !memberData.address.city || !memberData.address.state)) {
-      alert('Please fill all address fields');
-      return;
-    }
-    setActiveStep((prev) => prev + 1);
   };
 
-  const handleBack = () => setActiveStep((prev) => prev - 1);
-
-  const handleFileUpload = (event) => {
-    const files = Array.from(event.target.files);
-    setDocumentFiles(files);
-    setMemberData(prev => ({
-      ...prev,
-      uploadedDocuments: files.map(file => ({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        uploadedAt: new Date().toISOString()
-      }))
-    }));
-  };
-
-  const handleSubmit = () => {
-    if (!memberData.kyc.aadhar || !memberData.kyc.pan) {
-      alert('Please fill all KYC fields');
-      return;
-    }
-
-    onAddMember(memberData);
-    setActiveStep(0);
-    setMemberData({
-      name: '',
-      email: '',
-      mobile: '',
-      dob: '',
-      address: { street: '', city: '', state: '', pincode: '', country: 'India' },
-      kyc: { aadhar: '', pan: '' },
-      uploadedDocuments: []
-    });
-    setDocumentFiles([]);
+  const handleBack = () => {
+    if (activeStep > 0) setActiveStep(activeStep - 1);
   };
 
   return (
-    <Box>
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-        {steps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+    <Container maxWidth="md" sx={{ py: 3 }}>
+      <Card
+        sx={{
+          borderRadius: 4,
+          boxShadow: 8,
+          background: "linear-gradient(135deg,#e3f2fd,#ffffff)",
+          p: 2,
+        }}
+      >
+        <CardContent>
+          <Typography
+            variant="h5"
+            align="center"
+            gutterBottom
+            sx={{ fontWeight: "bold", color: "#1e3a8a" }}
+          >
+            Add Member
+          </Typography>
 
-      {activeStep === 0 && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <TextField 
-              fullWidth 
-              label="Full Name *" 
-              value={memberData.name} 
-              onChange={(e) => setMemberData({...memberData, name: e.target.value})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField 
-              fullWidth 
-              label="Email *" 
-              type="email" 
-              value={memberData.email} 
-              onChange={(e) => setMemberData({...memberData, email: e.target.value})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField 
-              fullWidth 
-              label="Mobile *" 
-              value={memberData.mobile} 
-              onChange={(e) => setMemberData({...memberData, mobile: e.target.value})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField 
-              fullWidth 
-              label="Date of Birth" 
-              type="date" 
-              InputLabelProps={{ shrink: true }} 
-              value={memberData.dob} 
-              onChange={(e) => setMemberData({...memberData, dob: e.target.value})} 
-            />
-          </Grid>
-        </Grid>
-      )}
+          {/* Stepper */}
+          <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 3 }}>
+            {steps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
 
-      {activeStep === 1 && (
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <TextField 
-              fullWidth 
-              label="Street Address *" 
-              value={memberData.address.street} 
-              onChange={(e) => setMemberData({...memberData, address: {...memberData.address, street: e.target.value}})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField 
-              fullWidth 
-              label="City *" 
-              value={memberData.address.city} 
-              onChange={(e) => setMemberData({...memberData, address: {...memberData.address, city: e.target.value}})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField 
-              fullWidth 
-              label="State *" 
-              value={memberData.address.state} 
-              onChange={(e) => setMemberData({...memberData, address: {...memberData.address, state: e.target.value}})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TextField 
-              fullWidth 
-              label="Pincode" 
-              value={memberData.address.pincode} 
-              onChange={(e) => setMemberData({...memberData, address: {...memberData.address, pincode: e.target.value}})} 
-            />
-          </Grid>
-        </Grid>
-      )}
-
-      {activeStep === 2 && (
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
-            <TextField 
-              fullWidth 
-              label="Aadhar Number *" 
-              value={memberData.kyc.aadhar} 
-              onChange={(e) => setMemberData({...memberData, kyc: {...memberData.kyc, aadhar: e.target.value}})} 
-            />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField 
-              fullWidth 
-              label="PAN Number *" 
-              value={memberData.kyc.pan} 
-              onChange={(e) => setMemberData({...memberData, kyc: {...memberData.kyc, pan: e.target.value}})} 
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <Button 
-              component="label" 
-              startIcon={<CloudUpload />} 
-              variant="outlined"
-              sx={{ mr: 2 }}
-            >
-              Upload Documents
-              <input
-                type="file"
-                hidden
-                multiple
-                onChange={handleFileUpload}
-                accept=".pdf,.jpg,.jpeg,.png"
+          {/* Step 1: Personal Info */}
+          {activeStep === 0 && (
+            <Box>
+              <Box textAlign="center" mb={2}>
+                <Avatar
+                  src={photo}
+                  sx={{
+                    width: 100,
+                    height: 100,
+                    margin: "auto",
+                    border: "2px solid #1976d2",
+                  }}
+                />
+                <IconButton
+                  color="primary"
+                  aria-label="upload picture"
+                  component="label"
+                >
+                  <input hidden accept="image/*" type="file" onChange={handlePhotoUpload} />
+                  <PhotoCamera />
+                </IconButton>
+              </Box>
+              <FormControl fullWidth margin="normal" sx={{ mb: 2 }}>
+                <InputLabel>Select Existing Member (Optional)</InputLabel>
+                <Select value={selectedMember} onChange={handleMemberChange}>
+                  <MenuItem value="">Create New Member</MenuItem>
+                  {members.map((m) => (
+                    <MenuItem key={m.memberId} value={m.memberId}>
+                      {m.name} ({m.memberId})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="Applicant Name"
+                name="applicantName"
+                value={formData.applicantName}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+                required
               />
-            </Button>
-            {documentFiles.length > 0 && (
-              <Typography variant="body2" sx={{ mt: 1 }}>
-                {documentFiles.length} file(s) selected
+              <TextField
+                fullWidth
+                label="Father/Husband Name"
+                name="fatherHusbandName"
+                value={formData.fatherHusbandName}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Mother Name"
+                name="motherName"
+                value={formData.motherName}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Date of Birth"
+                name="dob"
+                type="date"
+                value={formData.dob}
+                onChange={handleChange}
+                InputLabelProps={{ shrink: true }}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Age"
+                name="age"
+                type="number"
+                value={formData.age}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Gender</InputLabel>
+                <Select
+                  name="gender"
+                  value={formData.gender}
+                  label="Gender"
+                  onChange={handleChange}
+                >
+                  <MenuItem value="male">Male</MenuItem>
+                  <MenuItem value="female">Female</MenuItem>
+                  <MenuItem value="other">Other</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Marital Status</InputLabel>
+                <Select
+                  name="maritalStatus"
+                  value={formData.maritalStatus}
+                  label="Marital Status"
+                  onChange={handleChange}
+                >
+                  <MenuItem value="single">Single</MenuItem>
+                  <MenuItem value="married">Married</MenuItem>
+                  <MenuItem value="divorced">Divorced</MenuItem>
+                  <MenuItem value="widowed">Widowed</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+          )}
+
+          {/* Step 2: Contact & Address */}
+          {activeStep === 1 && (
+            <Box>
+              <TextField
+                fullWidth
+                label="Monthly Income"
+                name="monthlyIncome"
+                type="number"
+                value={formData.monthlyIncome}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Occupation"
+                name="occupation"
+                value={formData.occupation}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Residence Type</InputLabel>
+                <Select
+                  name="residenceType"
+                  value={formData.residenceType}
+                  label="Residence Type"
+                  onChange={handleChange}
+                >
+                  <MenuItem value="owned">Owned</MenuItem>
+                  <MenuItem value="rented">Rented</MenuItem>
+                  <MenuItem value="leased">Leased</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="Correspondence Address"
+                name="correspondenceAddress"
+                multiline
+                rows={3}
+                value={formData.correspondenceAddress}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Permanent Address"
+                name="permanentAddress"
+                multiline
+                rows={3}
+                value={formData.permanentAddress}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Contact Number"
+                name="contact"
+                value={formData.contact}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Email"
+                name="email"
+                type="email"
+                value={formData.email}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+            </Box>
+          )}
+
+          {/* Step 3: Documents */}
+          {activeStep === 2 && (
+            <Box>
+              <TextField
+                fullWidth
+                label="PAN Number"
+                name="pan"
+                value={formData.pan}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Aadhar Number"
+                name="aadhar"
+                value={formData.aadhar}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="h6" gutterBottom>
+                  Upload Documents
+                </Typography>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<CloudUpload />}
+                  sx={{ mr: 2 }}
+                >
+                  Upload ID Proof
+                  <input type="file" hidden />
+                </Button>
+                <Button
+                  variant="outlined"
+                  component="label"
+                  startIcon={<CloudUpload />}
+                >
+                  Upload Address Proof
+                  <input type="file" hidden />
+                </Button>
+              </Box>
+            </Box>
+          )}
+
+          {/* Step 4: Preview */}
+          {activeStep === 3 && (
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                Review Member Details
               </Typography>
-            )}
-          </Grid>
-        </Grid>
-      )}
+              <Card variant="outlined" sx={{ p: 2, mb: 2 }}>
+                <Typography><strong>Name:</strong> {formData.applicantName}</Typography>
+                <Typography><strong>Email:</strong> {formData.email}</Typography>
+                <Typography><strong>Contact:</strong> {formData.contact}</Typography>
+                <Typography><strong>Address:</strong> {formData.correspondenceAddress}</Typography>
+                <Typography><strong>PAN:</strong> {formData.pan}</Typography>
+                <Typography><strong>Aadhar:</strong> {formData.aadhar}</Typography>
+              </Card>
+              <Alert severity="info">
+                Please review all details before submitting. The member will be added to the system.
+              </Alert>
+            </Box>
+          )}
 
-      {activeStep === 3 && (
-        <Box>
-          <Typography variant="h6" gutterBottom>Review Member Information</Typography>
-          <Card sx={{ p: 2, mb: 2 }}>
-            <Typography><strong>Name:</strong> {memberData.name}</Typography>
-            <Typography><strong>Email:</strong> {memberData.email}</Typography>
-            <Typography><strong>Mobile:</strong> {memberData.mobile}</Typography>
-            <Typography><strong>Date of Birth:</strong> {memberData.dob}</Typography>
-          </Card>
-          
-          <Card sx={{ p: 2, mb: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>Address</Typography>
-            <Typography><strong>Street:</strong> {memberData.address.street}</Typography>
-            <Typography><strong>City:</strong> {memberData.address.city}</Typography>
-            <Typography><strong>State:</strong> {memberData.address.state}</Typography>
-            <Typography><strong>Pincode:</strong> {memberData.address.pincode}</Typography>
-          </Card>
-          
-          <Card sx={{ p: 2, mb: 2 }}>
-            <Typography variant="subtitle1" gutterBottom>KYC Details</Typography>
-            <Typography><strong>Aadhar:</strong> {memberData.kyc.aadhar}</Typography>
-            <Typography><strong>PAN:</strong> {memberData.kyc.pan}</Typography>
-            <Typography><strong>Documents:</strong> {documentFiles.length} file(s)</Typography>
-          </Card>
-          
-          {/* <Button variant="contained" onClick={handleSubmit} sx={{ mt: 2 }}>
-            Submit Registration
-          </Button> */}
-        </Box>
-        
-      )}
-
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
-        <Button disabled={activeStep === 0} onClick={handleBack}>
-          Back
-        </Button>
-        <Button variant="contained" onClick={activeStep === steps.length - 1 ? handleSubmit : handleNext}>
-          {activeStep === steps.length - 1 ? 'Submit Registration' : 'Next'}
-        </Button>
-      </Box>
-    </Box>
+          {/* Navigation Buttons */}
+          <Box display="flex" justifyContent="space-between" mt={3}>
+            <Button
+              disabled={activeStep === 0}
+              onClick={handleBack}
+              variant="outlined"
+              sx={{ borderRadius: 3 }}
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleNext}
+              variant="contained"
+              sx={{
+                px: 4,
+                borderRadius: 3,
+                background: "linear-gradient(90deg,#1976d2,#42a5f5)",
+              }}
+            >
+              {activeStep === steps.length - 1 ? "Confirm & Submit" : "Next"}
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+    </Container>
   );
 }
 
@@ -746,9 +1085,9 @@ function FeeCollection({ members, onCollectFee }) {
                   <Chip label="Payment Due" color="error" />
                 </Grid>
                 <Grid item xs={12} md={2}>
-                  <Button 
-                    variant="contained" 
-                    size="small" 
+                  <Button
+                    variant="contained"
+                    size="small"
                     onClick={() => onCollectFee(member._id, { amount: member.membershipFee.amount })}
                   >
                     Collect Fee
@@ -801,19 +1140,19 @@ function ProfileManagement({ members, onKYCUpload }) {
       <Grid item xs={12} md={4}>
         <Typography variant="h6" gutterBottom>Select Member</Typography>
         {members.map(member => (
-          <Card 
-            key={member._id} 
-            sx={{ 
-              mb: 1, 
+          <Card
+            key={member._id}
+            sx={{
+              mb: 1,
               cursor: 'pointer',
               backgroundColor: selectedMember?._id === member._id ? 'action.selected' : 'background.paper'
-            }} 
+            }}
             onClick={() => {
               setSelectedMember(member);
-              setKycData({ 
-                aadhar: member.kyc.aadhar, 
-                pan: member.kyc.pan, 
-                documents: member.kyc.documents || [] 
+              setKycData({
+                aadhar: member.kyc.aadhar,
+                pan: member.kyc.pan,
+                documents: member.kyc.documents || []
               });
             }}
           >
@@ -826,7 +1165,7 @@ function ProfileManagement({ members, onKYCUpload }) {
           </Card>
         ))}
       </Grid>
-      
+
       <Grid item xs={12} md={8}>
         {selectedMember ? (
           <Box>
@@ -837,45 +1176,45 @@ function ProfileManagement({ members, onKYCUpload }) {
               <Typography variant="subtitle1" gutterBottom>Contact Information</Typography>
               <Typography><strong>Email:</strong> {selectedMember.email}</Typography>
               <Typography><strong>Mobile:</strong> {selectedMember.mobile}</Typography>
-              
+
               <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Address</Typography>
               <Typography>
                 {selectedMember.address.street}, {selectedMember.address.city}, {selectedMember.address.state} - {selectedMember.address.pincode}
               </Typography>
-              
+
               <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>KYC Information</Typography>
               <Typography><strong>Aadhar:</strong> {selectedMember.kyc.aadhar}</Typography>
               <Typography><strong>PAN:</strong> {selectedMember.kyc.pan}</Typography>
-              <KYCStatusChip 
-                label={selectedMember.kyc.verified ? "KYC Verified" : "KYC Pending"} 
+              <KYCStatusChip
+                label={selectedMember.kyc.verified ? "KYC Verified" : "KYC Pending"}
                 verified={selectedMember.kyc.verified}
                 sx={{ mt: 1, mb: 2 }}
               />
-              
+
               {!selectedMember.kyc.verified && (
                 <Box sx={{ mt: 2 }}>
                   <Typography variant="subtitle2" gutterBottom>Update KYC Information</Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={12} md={6}>
-                      <TextField 
-                        fullWidth 
-                        label="Aadhar Number" 
-                        value={kycData.aadhar} 
-                        onChange={(e) => setKycData({...kycData, aadhar: e.target.value})}
+                      <TextField
+                        fullWidth
+                        label="Aadhar Number"
+                        value={kycData.aadhar}
+                        onChange={(e) => setKycData({ ...kycData, aadhar: e.target.value })}
                       />
                     </Grid>
                     <Grid item xs={12} md={6}>
-                      <TextField 
-                        fullWidth 
-                        label="PAN Number" 
-                        value={kycData.pan} 
-                        onChange={(e) => setKycData({...kycData, pan: e.target.value})}
+                      <TextField
+                        fullWidth
+                        label="PAN Number"
+                        value={kycData.pan}
+                        onChange={(e) => setKycData({ ...kycData, pan: e.target.value })}
                       />
                     </Grid>
                     <Grid item xs={12}>
-                      <Button 
-                        component="label" 
-                        startIcon={<CloudUpload />} 
+                      <Button
+                        component="label"
+                        startIcon={<CloudUpload />}
                         variant="outlined"
                         sx={{ mr: 2 }}
                       >
@@ -895,8 +1234,8 @@ function ProfileManagement({ members, onKYCUpload }) {
                       )}
                     </Grid>
                     <Grid item xs={12}>
-                      <Button 
-                        variant="contained" 
+                      <Button
+                        variant="contained"
                         onClick={handleKYCSubmit}
                         disabled={!kycData.aadhar || !kycData.pan}
                       >

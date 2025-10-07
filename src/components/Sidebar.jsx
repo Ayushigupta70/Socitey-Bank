@@ -14,6 +14,7 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SavingsIcon from '@mui/icons-material/Savings';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import PeopleIcon from '@mui/icons-material/People';
+import CasesIcon from '@mui/icons-material/Cases';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
@@ -30,7 +31,7 @@ const StyledDrawer = styled(Drawer)(({ theme }) => ({
     border: 'none',
     boxShadow: theme.shadows[8]
   }
-}));
+})); 
 
 const LogoSection = styled(Box)(({ theme }) => ({
   padding: theme.spacing(4, 3, 3),
@@ -87,6 +88,7 @@ const menu = [
     ]
   },
   { to: '/guarantor', label: 'Guarantor', icon: <PeopleIcon /> },
+  { to: '/cases', label: 'Cases', icon: <CasesIcon /> },
   { to: '/reports', label: 'Reports', icon: <AssessmentIcon /> }
 ];
 
