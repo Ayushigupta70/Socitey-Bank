@@ -19,6 +19,7 @@ import {
   InputLabel,
   FormControl,
   Paper,
+  Alert,
 } from "@mui/material";
 import { PhotoCamera } from "@mui/icons-material";
 import { v4 as uuidv4 } from "uuid";
@@ -31,6 +32,7 @@ export default function SmartLoanApplication() {
   const [photo, setPhoto] = useState(null);
   const [members, setMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState("");
+  const [emiError, setEmiError] = useState(""); // <-- error message state
 
   const [form, setForm] = useState({
     applicantName: "",
@@ -40,6 +42,7 @@ export default function SmartLoanApplication() {
     monthlyIncome: "",
     requiredLoan: "",
     tenure: "",
+    intrestRate: "",
     presentAddress: "",
     permanentAddress: "",
     residenceType: "",
@@ -64,7 +67,8 @@ export default function SmartLoanApplication() {
   }, []);
 
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
   };
 
   const handleMemberChange = (e) => {
@@ -93,19 +97,46 @@ export default function SmartLoanApplication() {
     }
   };
 
+  //  Updated EMI calculation logic based on entered interest rate
+  const calculateEMI = () => {
+    const P = parseFloat(form.requiredLoan) || 0;
+    const R = (parseFloat(form.intrestRate) || 0) / 100 / 12;
+    const N = parseInt(form.tenure) || 0;
+    return N && P && R
+      ? (P * R * Math.pow(1 + R, N)) / (Math.pow(1 + R, N) - 1)
+      : 0;
+  };
+
+  //  Validate EMI affordability (EMI ≤ 50% of income)
+  useEffect(() => {
+    const emi = calculateEMI();
+    const income = parseFloat(form.monthlyIncome) || 0;
+    if (emi > income / 2 && emi > 0 && income > 0) {
+      setEmiError("EMI exceeds 50% of your monthly income. Please increase tenure or reduce loan amount.");
+    } else {
+      setEmiError("");
+    }
+  }, [form.requiredLoan, form.monthlyIncome, form.tenure, form.intrestRate]);
+
   const handleNext = () => {
+    if (activeStep === 1 && emiError) {
+      alert("Please fix the EMI issue before proceeding.");
+      return;
+    }
+
     if (activeStep < steps.length - 1) {
       setActiveStep(activeStep + 1);
     } else {
       // Save loan to member
+      const emi = calculateEMI();
       const loan = {
         loanId: uuidv4(),
         product: form.purpose,
         principal: parseFloat(form.requiredLoan),
         tenureMonths: parseInt(form.tenure),
-        interest: 10, // Fixed interest example
-        emi: calculateEMI().toFixed(2),
-        totalPayable: (calculateEMI() * parseInt(form.tenure)).toFixed(2),
+        interest: parseFloat(form.intrestRate),
+        emi: emi.toFixed(2),
+        totalPayable: (emi * parseInt(form.tenure)).toFixed(2),
         status: "pending",
         submittedAt: new Date().toISOString(),
       };
@@ -119,7 +150,7 @@ export default function SmartLoanApplication() {
       setMembers(updatedMembers);
       localStorage.setItem("members", JSON.stringify(updatedMembers));
 
-      alert("✅ Loan Application Submitted Successfully!");
+      alert(" Loan Application Submitted Successfully!");
       // Reset form
       setForm({
         applicantName: "",
@@ -129,6 +160,7 @@ export default function SmartLoanApplication() {
         monthlyIncome: "",
         requiredLoan: "",
         tenure: "",
+        intrestRate: "",
         presentAddress: "",
         permanentAddress: "",
         residenceType: "",
@@ -150,18 +182,22 @@ export default function SmartLoanApplication() {
     if (activeStep > 0) setActiveStep(activeStep - 1);
   };
 
-  const calculateEMI = () => {
-    const P = parseFloat(form.requiredLoan) || 0;
-    const R = 10 / 100 / 12; // 10% yearly
-    const N = parseInt(form.tenure) || 0;
-    return N && P ? (P * R * Math.pow(1 + R, N)) / (Math.pow(1 + R, N) - 1) : 0;
-  };
-
   return (
     <Container maxWidth="md" sx={{ py: 3 }}>
-      <Card sx={{ borderRadius: 4, boxShadow: 8, background: "linear-gradient(135deg,#e3f2fd,#ffffff)", p: 2 }}>
+      <Card
+        sx={{
+          borderRadius: 4,
+          boxShadow: 8,
+          background: "linear-gradient(135deg,#e3f2fd,#ffffff)",
+          p: 2,
+        }}
+      >
         <CardContent>
-          <Typography variant="h5" align="center" sx={{ fontWeight: "bold", color: "#1e3a8a", mb: 3 }}>
+          <Typography
+            variant="h5"
+            align="center"
+            sx={{ fontWeight: "bold", color: "#1e3a8a", mb: 3 }}
+          >
             Loan Application Form
           </Typography>
 
@@ -173,10 +209,19 @@ export default function SmartLoanApplication() {
             ))}
           </Stepper>
 
+          {/* Step 1 */}
           {activeStep === 0 && (
             <Box>
               <Box textAlign="center" mb={2}>
-                <Avatar src={photo} sx={{ width: 100, height: 100, margin: "auto", border: "2px solid #1976d2" }} />
+                <Avatar
+                  src={photo}
+                  sx={{
+                    width: 100,
+                    height: 100,
+                    margin: "auto",
+                    border: "2px solid #1976d2",
+                  }}
+                />
                 <IconButton color="primary" component="label">
                   <input hidden accept="image/*" type="file" onChange={handlePhotoUpload} />
                   <PhotoCamera />
@@ -185,7 +230,11 @@ export default function SmartLoanApplication() {
 
               <FormControl fullWidth margin="normal" sx={{ mb: 2 }}>
                 <InputLabel>Select Member</InputLabel>
-                <Select value={selectedMember} onChange={handleMemberChange} required>
+                <Select
+                  value={selectedMember}
+                  onChange={handleMemberChange}
+                  required
+                >
                   {members.map((m) => (
                     <MenuItem key={m.memberId} value={m.memberId}>
                       {m.name} ({m.memberId})
@@ -194,68 +243,220 @@ export default function SmartLoanApplication() {
                 </Select>
               </FormControl>
 
-              <TextField fullWidth label="Applicant Name" name="applicantName" value={form.applicantName} onChange={handleChange} sx={{ mb: 2 }} />
-              <TextField fullWidth label="Father/Husband Name" name="fatherHusbandName" value={form.fatherHusbandName} onChange={handleChange} sx={{ mb: 2 }} />
+              <TextField
+                fullWidth
+                label="Applicant Name"
+                name="applicantName"
+                value={form.applicantName}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Father/Husband Name"
+                name="fatherHusbandName"
+                value={form.fatherHusbandName}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
-                  <TextField select fullWidth label="Marital Status" name="maritalStatus" value={form.maritalStatus} onChange={handleChange} sx={{ mb: 2 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Marital Status"
+                    name="maritalStatus"
+                    value={form.maritalStatus}
+                    onChange={handleChange}
+                    sx={{ mb: 2 }}
+                  >
                     <MenuItem value="Single">Single</MenuItem>
                     <MenuItem value="Married">Married</MenuItem>
                   </TextField>
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth type="date" label="Date of Birth" name="dob" value={form.dob} onChange={handleChange} InputLabelProps={{ shrink: true }} />
+                  <TextField
+                    fullWidth
+                    type="date"
+                    label="Date of Birth"
+                    name="dob"
+                    value={form.dob}
+                    onChange={handleChange}
+                    InputLabelProps={{ shrink: true }}
+                  />
                 </Grid>
 
                 <Grid item xs={12} sm={4}>
-                  <TextField fullWidth type="number" label="Age" name="age" value={form.age} onChange={handleChange} />
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Age"
+                    name="age"
+                    value={form.age}
+                    onChange={handleChange}
+                  />
                 </Grid>
               </Grid>
             </Box>
           )}
 
+          {/* Step 2 */}
           {activeStep === 1 && (
             <Box>
-              <TextField fullWidth label="Purpose of Loan" name="purpose" value={form.purpose} onChange={handleChange} sx={{ mb: 2 }} />
+              <TextField
+                fullWidth
+                label="Purpose of Loan"
+                name="purpose"
+                value={form.purpose}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
               <Grid container spacing={2}>
                 <Grid item xs={12} sm={6}>
-                  <TextField type="number" fullWidth label="Monthly Income" name="monthlyIncome" value={form.monthlyIncome} onChange={handleChange} />
+                  <TextField
+                    type="number"
+                    fullWidth
+                    label="Monthly Income"
+                    name="monthlyIncome"
+                    value={form.monthlyIncome}
+                    onChange={handleChange}
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField type="number" fullWidth label="Required Loan Amount" name="requiredLoan" value={form.requiredLoan} onChange={handleChange} />
+                  <TextField
+                    type="number"
+                    fullWidth
+                    label="Required Loan Amount"
+                    name="requiredLoan"
+                    value={form.requiredLoan}
+                    onChange={handleChange}
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField type="number" fullWidth label="Tenure (Months)" name="tenure" value={form.tenure} onChange={handleChange} />
+                  <TextField
+                    type="number"
+                    fullWidth
+                    label="Tenure (Months)"
+                    name="tenure"
+                    value={form.tenure}
+                    onChange={handleChange}
+                  />
                 </Grid>
+                {/* ✅ Interest Rate Field */}
                 <Grid item xs={12} sm={6}>
-                  <Paper variant="outlined" sx={{ textAlign: "center", background: "#f8fafc", borderRadius: 2 }}>
-                    <Typography variant="body1" color="text.secondary">Estimated EMI:</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: "bold", color: "#1976d2" }}>₹{calculateEMI().toFixed(2)}</Typography>
+                  <TextField
+                    type="number"
+                    fullWidth
+                    label="Interest Rate (%)"
+                    name="intrestRate"
+                    value={form.intrestRate}
+                    onChange={handleChange}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      textAlign: "center",
+                      background: "#f8fafc",
+                      borderRadius: 2,
+                      p: 2,
+                    }}
+                  >
+                    <Typography variant="body1" color="text.secondary">
+                      Estimated EMI:
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      sx={{ fontWeight: "bold", color: "#1976d2" }}
+                    >
+                      ₹{calculateEMI().toFixed(2)}
+                    </Typography>
                   </Paper>
                 </Grid>
+
+                {/* Show Error */}
+                {emiError && (
+                  <Grid item xs={12}>
+                    <Alert severity="error">{emiError}</Alert>
+                  </Grid>
+                )}
+
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="PAN Card No." name="pan" value={form.pan} onChange={handleChange} sx={{ mb: 2 }} />
+                  <TextField
+                    fullWidth
+                    label="PAN Card No."
+                    name="pan"
+                    value={form.pan}
+                    onChange={handleChange}
+                    sx={{ mb: 2 }}
+                  />
                 </Grid>
                 <Grid item xs={12} sm={6}>
-                  <TextField fullWidth label="Aadhar No." name="aadhar" value={form.aadhar} onChange={handleChange} sx={{ mb: 2 }} />
+                  <TextField
+                    fullWidth
+                    label="Aadhar No."
+                    name="aadhar"
+                    value={form.aadhar}
+                    onChange={handleChange}
+                    sx={{ mb: 2 }}
+                  />
                 </Grid>
               </Grid>
             </Box>
           )}
 
+          {/* Step 3 */}
           {activeStep === 2 && (
             <Box>
-              <TextField fullWidth label="Mobile Number" name="mobile" value={form.mobile} onChange={handleChange} sx={{ mb: 2 }} />
-              <TextField fullWidth type="email" label="Email" name="email" value={form.email} onChange={handleChange} sx={{ mb: 2 }} />
-              <TextField fullWidth label="Present Address" name="presentAddress" value={form.presentAddress} onChange={handleChange} sx={{ mb: 2 }} />
-              <TextField fullWidth label="Permanent Address" name="permanentAddress" value={form.permanentAddress} onChange={handleChange} sx={{ mb: 2 }} />
+              <TextField
+                fullWidth
+                label="Mobile Number"
+                name="mobile"
+                value={form.mobile}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                type="email"
+                label="Email"
+                name="email"
+                value={form.email}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Present Address"
+                name="presentAddress"
+                value={form.presentAddress}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Permanent Address"
+                name="permanentAddress"
+                value={form.permanentAddress}
+                onChange={handleChange}
+                sx={{ mb: 2 }}
+              />
             </Box>
           )}
 
+          {/* Step 4 */}
           {activeStep === 3 && (
             <Box>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', justifyContent: 'center' }}>Preview Loan Application</Typography>
+              <Typography
+                variant="h6"
+                gutterBottom
+                sx={{ display: "flex", justifyContent: "center" }}
+              >
+                Preview Loan Application
+              </Typography>
               <Divider sx={{ mb: 2 }} />
               <Box textAlign="center" mb={2}>
                 <Avatar src={photo} sx={{ width: 100, height: 100, margin: "auto" }} />
@@ -263,17 +464,37 @@ export default function SmartLoanApplication() {
               <Grid container spacing={2}>
                 {Object.entries(form).map(([key, value]) => (
                   <Grid item xs={6} key={key}>
-                    <Typography variant="body2" sx={{ fontWeight: "bold" }}>{key.replace(/([A-Z])/g, " $1")}:</Typography>
-                    <Typography variant="body2" color="text.secondary">{value || "-"}</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                      {key.replace(/([A-Z])/g, " $1")}:
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {value || "-"}
+                    </Typography>
                   </Grid>
                 ))}
               </Grid>
             </Box>
           )}
 
+          {/* Navigation Buttons */}
           <Box display="flex" justifyContent="space-between" mt={3}>
-            <Button disabled={activeStep === 0} onClick={handleBack} variant="outlined" sx={{ borderRadius: 3 }}>Back</Button>
-            <Button onClick={handleNext} variant="contained" sx={{ px: 4, borderRadius: 3, background: "linear-gradient(90deg,#1976d2,#42a5f5)" }}>
+            <Button
+              disabled={activeStep === 0}
+              onClick={handleBack}
+              variant="outlined"
+              sx={{ borderRadius: 3 }}
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleNext}
+              variant="contained"
+              sx={{
+                px: 4,
+                borderRadius: 3,
+                background: "linear-gradient(90deg,#1976d2,#42a5f5)",
+              }}
+            >
               {activeStep === steps.length - 1 ? "Confirm & Submit" : "Next"}
             </Button>
           </Box>

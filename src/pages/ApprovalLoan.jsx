@@ -15,6 +15,10 @@ import {
     IconButton,
     Menu,
     MenuItem,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
 } from "@mui/material";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
@@ -26,8 +30,14 @@ export default function ApprovalWorkflow() {
     const [filter, setFilter] = useState("all");
     const [anchorEl, setAnchorEl] = useState(null);
     const [selectedLoanId, setSelectedLoanId] = useState(null);
+    const [selectedLoan, setSelectedLoan] = useState(null);
+    const [repaymentDialogOpen, setRepaymentDialogOpen] = useState(false);
 
     useEffect(() => {
+        loadLoans();
+    }, []);
+
+    const loadLoans = () => {
         const members = JSON.parse(localStorage.getItem("members") || "[]");
         const allLoans = members.flatMap((m) =>
             (m.loans || []).map((loan) => ({
@@ -35,38 +45,64 @@ export default function ApprovalWorkflow() {
                 memberId: m.memberId,
                 memberName: m.name,
                 mobile: m.mobile || "-",
-                email: m.email || "-",
-                age: m.age || "-",
-                maritalStatus: m.maritalStatus || "-",
                 status: loan.status || "pending",
+                repayments: loan.repayments || [],
             }))
         );
         setLoans(allLoans);
-    }, []);
+    };
 
-    const updateLoanStatus = (loanId, status) => {
-        const updatedLoans = loans.map((l) =>
-            l.loanId === loanId ? { ...l, status } : l
-        );
-        setLoans(updatedLoans);
-
+    const updateMembersStorage = (updatedLoans) => {
         const members = JSON.parse(localStorage.getItem("members") || "[]");
         const updatedMembers = members.map((m) => ({
             ...m,
-            loans: (m.loans || []).map((loan) =>
-                loan.loanId === loanId ? { ...loan, status } : loan
-            ),
+            loans: updatedLoans.filter((l) => l.memberId === m.memberId),
         }));
         localStorage.setItem("members", JSON.stringify(updatedMembers));
     };
 
+    // 🟢 Approve Loan & Generate Repayment Schedule
     const handleApprove = () => {
-        updateLoanStatus(selectedLoanId, "approved");
+        const updatedLoans = loans.map((loan) => {
+            if (loan.loanId === selectedLoanId) {
+                const now = new Date();
+                const startMonth = new Date(now.getFullYear(), now.getMonth() + 1, 5); // 5th next month
+
+                const repayments = Array.from({ length: loan.tenureMonths }, (_, i) => {
+                    const date = new Date(
+                        startMonth.getFullYear(),
+                        startMonth.getMonth() + i,
+                        5
+                    );
+                    return {
+                        date: date.toISOString().split("T")[0],
+                        amount: parseFloat(loan.emi),
+                        paid: false,
+                        paidOn: null, // new field added
+                    };
+                });
+
+                return {
+                    ...loan,
+                    status: "approved",
+                    repayments,
+                    outstanding: parseFloat(loan.totalPayable),
+                };
+            }
+            return loan;
+        });
+
+        setLoans(updatedLoans);
+        updateMembersStorage(updatedLoans);
         handleClose();
     };
 
     const handleReject = () => {
-        updateLoanStatus(selectedLoanId, "rejected");
+        const updatedLoans = loans.map((l) =>
+            l.loanId === selectedLoanId ? { ...l, status: "rejected" } : l
+        );
+        setLoans(updatedLoans);
+        updateMembersStorage(updatedLoans);
         handleClose();
     };
 
@@ -80,41 +116,99 @@ export default function ApprovalWorkflow() {
         setSelectedLoanId(null);
     };
 
+    // 🧾 Repayment Handling
+    const handleOpenRepayment = (loan) => {
+        setSelectedLoan(loan);
+        setRepaymentDialogOpen(true);
+    };
+
+    const handleMarkPaid = (repayIndex) => {
+        const updatedLoans = loans.map((loan) => {
+            if (loan.loanId === selectedLoan.loanId) {
+                const repayments = [...loan.repayments];
+                if (!repayments[repayIndex].paid) {
+                    repayments[repayIndex].paid = true;
+                    repayments[repayIndex].paidOn = new Date().toISOString().split("T")[0]; // ✅ store date when paid
+                }
+
+                const totalPaid = repayments
+                    .filter((r) => r.paid)
+                    .reduce((sum, r) => sum + r.amount, 0);
+                const outstanding = Math.max(
+                    parseFloat(loan.totalPayable) - totalPaid,
+                    0
+                );
+
+                return { ...loan, repayments, outstanding };
+            }
+            return loan;
+        });
+
+        setLoans(updatedLoans);
+        updateMembersStorage(updatedLoans);
+        loadLoans();
+    };
+
+    const handleCloseDialog = () => {
+        setRepaymentDialogOpen(false);
+        setSelectedLoan(null);
+    };
+
     const getStatusChip = (status) => {
         switch (status) {
             case "approved":
-                return <Chip icon={<CheckCircleIcon />} label="Approved" color="success" size="small" />;
+                return (
+                    <Chip
+                        icon={<CheckCircleIcon />}
+                        label="Approved"
+                        color="success"
+                        size="small"
+                    />
+                );
             case "rejected":
-                return <Chip icon={<CancelIcon />} label="Rejected" color="error" size="small" />;
+                return (
+                    <Chip
+                        icon={<CancelIcon />}
+                        label="Rejected"
+                        color="error"
+                        size="small"
+                    />
+                );
             default:
-                return <Chip icon={<PendingActionsIcon />} label="Pending" color="warning" size="small" />;
+                return (
+                    <Chip
+                        icon={<PendingActionsIcon />}
+                        label="Pending"
+                        color="warning"
+                        size="small"
+                    />
+                );
         }
     };
 
-    const getRowStyle = (status) => {
-        switch (status) {
-            case "approved":
-                return { background: "linear-gradient(90deg, #e8f5e9, #c8e6c9)" };
-            case "rejected":
-                return { background: "linear-gradient(90deg, #ffebee, #ffcdd2)" };
-            default:
-                return { background: "linear-gradient(90deg, #fffde7, #fff9c4)" };
-        }
-    };
-
-    const filteredLoans = filter === "all" ? loans : loans.filter((loan) => loan.status === filter);
+    const filteredLoans =
+        filter === "all" ? loans : loans.filter((loan) => loan.status === filter);
 
     return (
         <Container maxWidth="xl" sx={{ mt: 4 }}>
-            <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>Loan Approval Workflow</Typography>
+            <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>
+                Loan Approval Workflow
+            </Typography>
 
+            {/* Filter Buttons */}
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
                 {["all", "pending", "approved", "rejected"].map((f) => (
                     <Button
                         key={f}
                         variant={filter === f ? "contained" : "outlined"}
                         color={
-                            f === "approved" ? "success" : f === "rejected" ? "error" : f === "pending" ? "warning" : "primary"
+                            f === "approved"
+                                ? "success"
+                                : f === "rejected"
+                                    ? "error"
+                                    : f === "pending"
+                                        ? "warning"
+                                        : "primary"
                         }
                         onClick={() => setFilter(f)}
                         size="small"
@@ -130,16 +224,12 @@ export default function ApprovalWorkflow() {
                         <TableRow>
                             <TableCell sx={{ color: "white" }}>Loan ID</TableCell>
                             <TableCell sx={{ color: "white" }}>Member</TableCell>
-                            <TableCell sx={{ color: "white" }}>Mobile</TableCell>
-                            <TableCell sx={{ color: "white" }}>Email</TableCell>
-                            <TableCell sx={{ color: "white" }}>Age</TableCell>
-                            <TableCell sx={{ color: "white" }}>Marital Status</TableCell>
-                            <TableCell sx={{ color: "white" }}>Loan Purpose</TableCell>
                             <TableCell sx={{ color: "white" }}>Principal (₹)</TableCell>
                             <TableCell sx={{ color: "white" }}>Interest (%)</TableCell>
-                            <TableCell sx={{ color: "white" }}>Tenure (Months)</TableCell>
+                            <TableCell sx={{ color: "white" }}>Tenure</TableCell>
                             <TableCell sx={{ color: "white" }}>EMI (₹)</TableCell>
                             <TableCell sx={{ color: "white" }}>Total Payable (₹)</TableCell>
+                            <TableCell sx={{ color: "white" }}>Outstanding (₹)</TableCell>
                             <TableCell sx={{ color: "white" }}>Status</TableCell>
                             <TableCell sx={{ color: "white" }}>Actions</TableCell>
                         </TableRow>
@@ -147,23 +237,26 @@ export default function ApprovalWorkflow() {
                     <TableBody>
                         {filteredLoans.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={14} align="center">No loan applications found.</TableCell>
+                                <TableCell colSpan={10} align="center">
+                                    No loan applications found.
+                                </TableCell>
                             </TableRow>
                         ) : (
                             filteredLoans.map((loan) => (
-                                <TableRow key={loan.loanId} sx={getRowStyle(loan.status)}>
+                                <TableRow key={loan.loanId}>
                                     <TableCell>{loan.loanId}</TableCell>
-                                    <TableCell>{loan.memberName} ({loan.memberId})</TableCell>
-                                    <TableCell>{loan.mobile}</TableCell>
-                                    <TableCell>{loan.email}</TableCell>
-                                    <TableCell>{loan.age}</TableCell>
-                                    <TableCell>{loan.maritalStatus}</TableCell>
-                                    <TableCell>{loan.product}</TableCell>
+                                    <TableCell>{loan.memberName}</TableCell>
                                     <TableCell>₹{loan.principal}</TableCell>
-                                    <TableCell>{loan.interest}</TableCell>
+                                    <TableCell>{loan.interest}%</TableCell>
                                     <TableCell>{loan.tenureMonths}</TableCell>
                                     <TableCell>₹{loan.emi}</TableCell>
                                     <TableCell>₹{loan.totalPayable}</TableCell>
+                                    <TableCell>
+                                        ₹
+                                        {loan.outstanding
+                                            ? loan.outstanding.toFixed(2)
+                                            : loan.totalPayable}
+                                    </TableCell>
                                     <TableCell>{getStatusChip(loan.status)}</TableCell>
                                     <TableCell>
                                         {loan.status === "pending" ? (
@@ -180,8 +273,18 @@ export default function ApprovalWorkflow() {
                                                     <MenuItem onClick={handleReject}>Reject</MenuItem>
                                                 </Menu>
                                             </>
+                                        ) : loan.status === "approved" ? (
+                                            <Button
+                                                size="small"
+                                                variant="outlined"
+                                                onClick={() => handleOpenRepayment(loan)}
+                                            >
+                                                Manage Repayment
+                                            </Button>
                                         ) : (
-                                            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>No Actions</Typography>
+                                            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
+                                                No Actions
+                                            </Typography>
                                         )}
                                     </TableCell>
                                 </TableRow>
@@ -190,6 +293,60 @@ export default function ApprovalWorkflow() {
                     </TableBody>
                 </Table>
             </Paper>
+
+            {/* 💰 Repayment Dialog */}
+            {selectedLoan && (
+                <Dialog open={repaymentDialogOpen} onClose={handleCloseDialog} fullWidth maxWidth="sm">
+                    <DialogTitle>Repayment Schedule for Loan {selectedLoan.loanId}</DialogTitle>
+                    <DialogContent>
+                        {selectedLoan.repayments && selectedLoan.repayments.length > 0 ? (
+                            selectedLoan.repayments.map((r, index) => (
+                                <Box
+                                    key={index}
+                                    sx={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "center",
+                                        mb: 1,
+                                        p: 1,
+                                        borderRadius: 2,
+                                        backgroundColor: r.paid ? "#e8f5e9" : "#fffde7",
+                                    }}
+                                >
+                                    <Box>
+                                        <Typography>
+                                            {r.date} — ₹{r.amount}
+                                        </Typography>
+                                        {r.paid && r.paidOn && (
+                                            <Typography variant="caption" color="text.secondary">
+                                                Paid on: {r.paidOn}
+                                            </Typography>
+                                        )}
+                                    </Box>
+
+                                    {r.paid ? (
+                                        <Chip label="Paid" color="success" size="small" />
+                                    ) : (
+                                        <Button
+                                            variant="contained"
+                                            color="success"
+                                            size="small"
+                                            onClick={() => handleMarkPaid(index)}
+                                        >
+                                            Mark Paid
+                                        </Button>
+                                    )}
+                                </Box>
+                            ))
+                        ) : (
+                            <Typography>No repayments found.</Typography>
+                        )}
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleCloseDialog}>Close</Button>
+                    </DialogActions>
+                </Dialog>
+            )}
         </Container>
     );
 }

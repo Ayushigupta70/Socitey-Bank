@@ -31,7 +31,7 @@ const StyledDrawer = styled(Drawer)(({ theme }) => ({
     border: 'none',
     boxShadow: theme.shadows[8]
   }
-})); 
+}));
 
 const LogoSection = styled(Box)(({ theme }) => ({
   padding: theme.spacing(4, 3, 3),
@@ -85,6 +85,14 @@ const menu = [
     children: [
       { to: '/loans', label: 'Loan Form' },
       { to: '/approvalloan', label: 'Loan Status' }
+    ]
+  },
+  {
+    label: 'Cheque Detail',
+    icon: <AccountBalanceIcon />,
+    children: [
+      { to: '/membercheque', label: 'Member Cheque' },
+      { to: '/guarantorcheque', label: 'Guarantor Cheque' }
     ]
   },
   { to: '/guarantor', label: 'Guarantor', icon: <PeopleIcon /> },
