@@ -3,7 +3,7 @@ import {
     Box, Card, CardContent, Typography, Avatar, IconButton, Grid, Dialog, DialogTitle,
     DialogContent, TextField, MenuItem, Button, Snackbar, Alert
 } from "@mui/material";
-import { Person, Visibility } from "@mui/icons-material";
+import { Person } from "@mui/icons-material";
 
 export default function GuarantorWithCheque() {
     const [members, setMembers] = useState([]);
@@ -48,7 +48,13 @@ export default function GuarantorWithCheque() {
             return m;
         });
 
+        // Update state
         setMembers(updatedMembers);
+
+        // Save to localStorage
+        localStorage.setItem("members", JSON.stringify(updatedMembers));
+
+        // Close dialog and show snackbar
         setChequeDialogOpen(false);
         setSnack(true);
     };
@@ -149,7 +155,7 @@ export default function GuarantorWithCheque() {
                             onChange={e => handleChequeChange("amount", e.target.value)}
                             inputProps={{
                                 min: 0,
-                                max: 1000000000, // max 10 crore
+                                max: 1000000000,
                                 step: 100
                             }}
                         />

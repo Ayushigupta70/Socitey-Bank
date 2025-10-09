@@ -16,7 +16,9 @@ import {
     TableContainer,
     TableHead,
     TableRow,
+    IconButton,
 } from "@mui/material";
+import { Edit, Delete } from "@mui/icons-material";
 
 function MemberChequeForm() {
     const [members, setMembers] = useState([]);
@@ -28,13 +30,18 @@ function MemberChequeForm() {
         amount: "",
     });
     const [cheques, setCheques] = useState([]);
+    const [editIndex, setEditIndex] = useState(null);
 
-    // Fetch JSON data
     useEffect(() => {
         fetch("/Member.json")
             .then((res) => res.json())
             .then((data) => setMembers(data))
             .catch((err) => console.error("Error loading members:", err));
+    }, []);
+
+    useEffect(() => {
+        const savedCheques = JSON.parse(localStorage.getItem("cheques") || "[]");
+        setCheques(savedCheques);
     }, []);
 
     const handleChange = (e) => {
@@ -44,16 +51,23 @@ function MemberChequeForm() {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        const selectedMember = members.find(
-            (m) => m.memberId === formData.memberId
-        );
-
+        const selectedMember = members.find((m) => m.memberId === formData.memberId);
         const newCheque = {
             ...formData,
             memberName: selectedMember?.name || "Unknown",
         };
 
-        setCheques((prev) => [...prev, newCheque]);
+        let updatedCheques = [];
+        if (editIndex !== null) {
+            updatedCheques = cheques.map((c, i) => (i === editIndex ? newCheque : c));
+            setEditIndex(null);
+        } else {
+            updatedCheques = [...cheques, newCheque];
+        }
+
+        setCheques(updatedCheques);
+        localStorage.setItem("cheques", JSON.stringify(updatedCheques));
+
         setFormData({
             memberId: "",
             chequeNo: "",
@@ -63,16 +77,27 @@ function MemberChequeForm() {
         });
     };
 
+    const handleEdit = (index) => {
+        const cheque = cheques[index];
+        setFormData(cheque);
+        setEditIndex(index);
+    };
+
+    const handleDelete = (index) => {
+        const updatedCheques = cheques.filter((_, i) => i !== index);
+        setCheques(updatedCheques);
+        localStorage.setItem("cheques", JSON.stringify(updatedCheques));
+    };
+
     return (
         <Box p={3}>
-            <Paper sx={{ p: 4, maxWidth: 600, mx: "auto", mb: 5 }}>
-                <Typography variant="h5" mb={3} align="center">
+            <Paper sx={{ p: 4, maxWidth: 600, mx: "auto", mb: 5, borderRadius: 3, boxShadow: 4 }}>
+                <Typography variant="h5" mb={3} align="center" fontWeight={600}>
                     Member Cheque Details Form
                 </Typography>
 
                 <form onSubmit={handleSubmit}>
                     <Grid container spacing={2}>
-                        {/* Member Name */}
                         <Grid item xs={12}>
                             <FormControl fullWidth required>
                                 <InputLabel>Select Member</InputLabel>
@@ -91,7 +116,6 @@ function MemberChequeForm() {
                             </FormControl>
                         </Grid>
 
-                        {/* Cheque No */}
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 label="Cheque No"
@@ -103,7 +127,6 @@ function MemberChequeForm() {
                             />
                         </Grid>
 
-                        {/* Dated */}
                         <Grid item xs={12} sm={6}>
                             <TextField
                                 label="Dated"
@@ -117,7 +140,6 @@ function MemberChequeForm() {
                             />
                         </Grid>
 
-                        {/* Bank & Branch */}
                         <Grid item xs={12}>
                             <TextField
                                 label="Bank & Branch Name"
@@ -129,7 +151,6 @@ function MemberChequeForm() {
                             />
                         </Grid>
 
-                        {/* Amount */}
                         <Grid item xs={12}>
                             <TextField
                                 label="Amount"
@@ -142,40 +163,62 @@ function MemberChequeForm() {
                             />
                         </Grid>
 
-                        {/* Submit */}
                         <Grid item xs={12} textAlign="center">
-                            <Button type="submit" variant="contained" color="primary">
-                                Submit Cheque
+                            <Button
+                                type="submit"
+                                variant="contained"
+                                color="primary"
+                                sx={{ px: 4, py: 1.2, borderRadius: 2 }}
+                            >
+                                {editIndex !== null ? "Update Cheque" : "Submit Cheque"}
                             </Button>
                         </Grid>
                     </Grid>
                 </form>
             </Paper>
 
-            {/* Cheque Table */}
             {cheques.length > 0 && (
-                <TableContainer component={Paper}>
-                    <Typography variant="h6" align="center" p={2}>
+                <TableContainer
+                    component={Paper}
+                    sx={{ maxWidth: 900, mx: "auto", borderRadius: 3, boxShadow: 4 }}
+                >
+                    <Typography variant="h6" align="center" mb={2} mt={2} fontWeight={600}>
                         Submitted Cheque Details
                     </Typography>
                     <Table>
                         <TableHead>
-                            <TableRow>
-                                <TableCell>Member Name</TableCell>
-                                <TableCell>Cheque No</TableCell>
-                                <TableCell>Dated</TableCell>
-                                <TableCell>Bank & Branch</TableCell>
-                                <TableCell>Amount</TableCell>
+                            <TableRow sx={{ backgroundColor: "#1976d2" }}>
+                                <TableCell sx={{ color: "#fff" }}>Member Name</TableCell>
+                                <TableCell sx={{ color: "#fff" }}>Cheque No</TableCell>
+                                <TableCell sx={{ color: "#fff" }}>Dated</TableCell>
+                                <TableCell sx={{ color: "#fff" }}>Bank & Branch</TableCell>
+                                <TableCell sx={{ color: "#fff" }}>Amount</TableCell>
+                                <TableCell sx={{ color: "#fff" }}>Actions</TableCell>
                             </TableRow>
                         </TableHead>
                         <TableBody>
-                            {cheques.map((ch, i) => (
-                                <TableRow key={i}>
+                            {cheques.map((ch, index) => (
+                                <TableRow
+                                    key={index}
+                                    sx={{
+                                        backgroundColor: index % 2 === 0 ? "#e3f2fd" : "#f1f8e9",
+                                    }}
+                                >
                                     <TableCell>{ch.memberName}</TableCell>
                                     <TableCell>{ch.chequeNo}</TableCell>
                                     <TableCell>{ch.dated}</TableCell>
                                     <TableCell>{ch.bankBranch}</TableCell>
-                                    <TableCell>₹{ch.amount}</TableCell>
+                                    <TableCell sx={{ fontWeight: 600, color: "#d32f2f" }}>
+                                        ₹{ch.amount}
+                                    </TableCell>
+                                    <TableCell>
+                                        <IconButton onClick={() => handleEdit(index)} color="primary">
+                                            <Edit />
+                                        </IconButton>
+                                        <IconButton onClick={() => handleDelete(index)} color="error">
+                                            <Delete />
+                                        </IconButton>
+                                    </TableCell>
                                 </TableRow>
                             ))}
                         </TableBody>

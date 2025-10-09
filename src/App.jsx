@@ -19,6 +19,7 @@ import Guarantor from "./pages/Guarantor.jsx";
 import Cases from "./pages/Cases.jsx";
 import MemberCheque from "./pages/MemberCheque.jsx";
 import GuarantorCheque from "./pages/GuarantorCheque.jsx";
+import EMIReport from "./pages/EMIReport.jsx";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -69,6 +70,7 @@ export default function App() {
                       <Route path="/cases" element={<Cases />} />
                       <Route path="/approvalloan" element={<ApprovalWorkflow />}></Route>
                       <Route path="/membercheque" element={<MemberCheque />}></Route>
+                      <Route path="/emireport" element={<EMIReport />} />
                       <Route path="/guarantorcheque" element={<GuarantorCheque />}></Route>
                       <Route path="*" element={<Navigate to="/" />} />
                     </Routes>

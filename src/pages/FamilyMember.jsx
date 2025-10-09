@@ -20,10 +20,21 @@ import {
     InputLabel,
     FormControl,
     Divider,
+    Tooltip,
 } from "@mui/material";
-import { ExpandMore, Add, Remove, FamilyRestroom } from "@mui/icons-material";
+import {
+    ExpandMore,
+    Add,
+    Remove,
+    FamilyRestroom,
+    Person,
+    Groups,
+    AccountBalance,
+    Edit,
+    Delete,
+} from "@mui/icons-material";
 import { motion, AnimatePresence } from "framer-motion";
-import memberData from "../../public/Member.json"; // Import your JSON file
+import memberData from "../../public/Member.json";
 
 export default function FamilyDetailsWow() {
     const steps = ["Borrower Info", "Family Members", "Society / Loan", "Review"];
@@ -31,8 +42,11 @@ export default function FamilyDetailsWow() {
     const [activeStep, setActiveStep] = useState(0);
     const [expanded, setExpanded] = useState(null);
     const [members, setMembers] = useState([]);
+    const [submissions, setSubmissions] = useState([]);
+    const [editingIndex, setEditingIndex] = useState(null);
 
     const [formData, setFormData] = useState({
+        borrowerId: "",
         borrowerName: "",
         mobile: "",
         fatherSpouse: "",
@@ -49,19 +63,27 @@ export default function FamilyDetailsWow() {
     });
 
     useEffect(() => {
-        setMembers(memberData); // Load borrowers from JSON
+        setMembers(memberData);
+
+        const savedData = localStorage.getItem("familyFormData");
+        if (savedData) setFormData(JSON.parse(savedData));
+
+        const savedSubmissions = localStorage.getItem("allFamilySubmissions");
+        if (savedSubmissions) setSubmissions(JSON.parse(savedSubmissions));
     }, []);
 
-    const handleChange = (field, value) => {
-        setFormData({ ...formData, [field]: value });
-    };
+    useEffect(() => {
+        localStorage.setItem("familyFormData", JSON.stringify(formData));
+    }, [formData]);
 
-    // Auto-fill mobile when borrower is selected
+    const handleChange = (field, value) => setFormData({ ...formData, [field]: value });
+
     const handleBorrowerSelect = (memberId) => {
         const member = members.find((m) => m.memberId === memberId);
         if (member) {
             setFormData({
                 ...formData,
+                borrowerId: member.memberId,
                 borrowerName: member.name,
                 mobile: member.mobile || "",
             });
@@ -74,10 +96,7 @@ export default function FamilyDetailsWow() {
         setFormData({ ...formData, [field]: updated });
     };
 
-    const addMember = (field) => {
-        setFormData({ ...formData, [field]: [...formData[field], ""] });
-    };
-
+    const addMember = (field) => setFormData({ ...formData, [field]: [...formData[field], ""] });
     const removeMember = (field, index) => {
         const updated = [...formData[field]];
         updated.splice(index, 1);
@@ -89,41 +108,61 @@ export default function FamilyDetailsWow() {
     const toggleExpand = (section) => setExpanded(expanded === section ? null : section);
 
     const handleSubmit = () => {
-        console.log("✅ Submitted Data:", formData);
+        const savedSubmissions = JSON.parse(localStorage.getItem("allFamilySubmissions")) || [];
+        let updatedSubmissions = [];
+
+        if (editingIndex !== null) {
+            savedSubmissions[editingIndex] = formData;
+            updatedSubmissions = [...savedSubmissions];
+            setEditingIndex(null);
+        } else {
+            updatedSubmissions = [...savedSubmissions, formData];
+        }
+
+        localStorage.setItem("allFamilySubmissions", JSON.stringify(updatedSubmissions));
+        setSubmissions(updatedSubmissions);
+
         alert("Form Submitted Successfully!");
+        setFormData({
+            borrowerId: "",
+            borrowerName: "",
+            mobile: "",
+            fatherSpouse: "",
+            fatherMobile: "",
+            fatherEmail: "",
+            mother: "",
+            children: [],
+            brothers: [],
+            sisters: [],
+            familyMemberSociety: "",
+            societyDetails: "",
+            familyMemberLoan: "",
+            loanDetails: "",
+        });
+        setActiveStep(0);
+    };
+
+    const handleEdit = (index) => {
+        setFormData(submissions[index]);
+        setActiveStep(0);
+        setEditingIndex(index);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    const handleDelete = (index) => {
+        const updated = [...submissions];
+        updated.splice(index, 1);
+        setSubmissions(updated);
+        localStorage.setItem("allFamilySubmissions", JSON.stringify(updated));
     };
 
     return (
-        <Box
-            sx={{
-                minHeight: "100vh",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                py: 5,
-            }}
-        >
+        <Box sx={{ minHeight: "100vh", py: 5, backgroundColor: "#f5f5f5" }}>
             <Container maxWidth="md">
-                <Paper
-                    elevation={6}
-                    sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        borderRadius: 4,
-                        p: 4,
-                    }}
-                >
-                    {/* Form Header */}
+                <Paper elevation={6} sx={{ display: "flex", flexDirection: "column", borderRadius: 4, p: 4 }}>
                     <Box display="flex" alignItems="center" justifyContent="center" sx={{ mb: 3, gap: 1 }}>
                         <FamilyRestroom color="primary" fontSize="large" />
-                        <Typography
-                            variant="h4"
-                            sx={{
-                                fontWeight: 600,
-                                borderBottom: "2px solid #1976d2",
-                                pb: 1,
-                            }}
-                        >
+                        <Typography variant="h4" sx={{ fontWeight: 600, borderBottom: "2px solid #1976d2", pb: 1 }}>
                             Family Member Detail
                         </Typography>
                     </Box>
@@ -146,16 +185,13 @@ export default function FamilyDetailsWow() {
                             exit={{ opacity: 0, x: -50 }}
                             transition={{ duration: 0.4 }}
                         >
-                            {/* Step 1: Borrower Info */}
+                            {/* Step Contents (Same as before) */}
                             {activeStep === 0 && (
                                 <Grid container spacing={2}>
                                     <Grid item xs={6}>
                                         <FormControl fullWidth>
                                             <InputLabel>Borrower Name</InputLabel>
-                                            <Select
-                                                value={members.find((m) => m.name === formData.borrowerName)?.memberId || ""}
-                                                onChange={(e) => handleBorrowerSelect(e.target.value)}
-                                            >
+                                            <Select value={formData.borrowerId || ""} onChange={(e) => handleBorrowerSelect(e.target.value)}>
                                                 {members.map((m) => (
                                                     <MenuItem key={m.memberId} value={m.memberId}>
                                                         {m.name} ({m.memberId})
@@ -175,22 +211,21 @@ export default function FamilyDetailsWow() {
                                 </Grid>
                             )}
 
-                            {/* Step 2: Family Members */}
                             {activeStep === 1 && (
                                 <Box>
                                     {/* Father / Spouse */}
-                                    <Card sx={{ mb: 2 }}>
+                                    <Card sx={{ mb: 2, borderLeft: "5px solid #1976d2" }}>
                                         <CardContent>
-                                            <Typography variant="h6">Father / Spouse</Typography>
-                                            <Grid container spacing={2} sx={{ mt: 1 }}>
+                                            <Typography variant="h6" sx={{ mb: 1 }}>
+                                                <Person sx={{ mr: 1 }} /> Father / Spouse
+                                            </Typography>
+                                            <Grid container spacing={2}>
                                                 <Grid item xs={4}>
                                                     <TextField
                                                         label="Name"
                                                         fullWidth
                                                         value={formData.fatherSpouse}
-                                                        onChange={(e) =>
-                                                            handleChange("fatherSpouse", e.target.value)
-                                                        }
+                                                        onChange={(e) => handleChange("fatherSpouse", e.target.value)}
                                                     />
                                                 </Grid>
                                                 <Grid item xs={4}>
@@ -198,9 +233,7 @@ export default function FamilyDetailsWow() {
                                                         label="Mobile"
                                                         fullWidth
                                                         value={formData.fatherMobile}
-                                                        onChange={(e) =>
-                                                            handleChange("fatherMobile", e.target.value)
-                                                        }
+                                                        onChange={(e) => handleChange("fatherMobile", e.target.value)}
                                                     />
                                                 </Grid>
                                                 <Grid item xs={4}>
@@ -208,9 +241,7 @@ export default function FamilyDetailsWow() {
                                                         label="Email"
                                                         fullWidth
                                                         value={formData.fatherEmail}
-                                                        onChange={(e) =>
-                                                            handleChange("fatherEmail", e.target.value)
-                                                        }
+                                                        onChange={(e) => handleChange("fatherEmail", e.target.value)}
                                                     />
                                                 </Grid>
                                             </Grid>
@@ -218,9 +249,11 @@ export default function FamilyDetailsWow() {
                                     </Card>
 
                                     {/* Mother */}
-                                    <Card sx={{ mb: 2 }}>
+                                    <Card sx={{ mb: 2, borderLeft: "5px solid #f50057" }}>
                                         <CardContent>
-                                            <Typography variant="h6">Mother</Typography>
+                                            <Typography variant="h6" sx={{ mb: 1 }}>
+                                                <Person sx={{ mr: 1 }} /> Mother
+                                            </Typography>
                                             <TextField
                                                 label="Mother’s Name"
                                                 fullWidth
@@ -230,9 +263,9 @@ export default function FamilyDetailsWow() {
                                         </CardContent>
                                     </Card>
 
-                                    {/* Expandable Sections */}
+                                    {/* Children / Brothers / Sisters */}
                                     {["children", "brothers", "sisters"].map((field, i) => (
-                                        <Card key={field} sx={{ mb: 2 }}>
+                                        <Card key={field} sx={{ mb: 2, borderLeft: "5px solid #ff9800" }}>
                                             <CardContent>
                                                 <Box
                                                     display="flex"
@@ -242,55 +275,31 @@ export default function FamilyDetailsWow() {
                                                     sx={{ cursor: "pointer" }}
                                                 >
                                                     <Typography variant="h6">
-                                                        {i === 0
-                                                            ? "Children"
-                                                            : i === 1
-                                                                ? "Brothers"
-                                                                : "Sisters"}
+                                                        <Groups sx={{ mr: 1 }} />
+                                                        {i === 0 ? "Children" : i === 1 ? "Brothers" : "Sisters"}
                                                     </Typography>
                                                     <IconButton>
                                                         <ExpandMore
-                                                            sx={{
-                                                                transform:
-                                                                    expanded === field
-                                                                        ? "rotate(180deg)"
-                                                                        : "rotate(0)",
-                                                                transition: "0.3s",
-                                                            }}
+                                                            sx={{ transform: expanded === field ? "rotate(180deg)" : "rotate(0)", transition: "0.3s" }}
                                                         />
                                                     </IconButton>
                                                 </Box>
                                                 <Collapse in={expanded === field} timeout="auto">
                                                     <Box sx={{ mt: 2 }}>
                                                         {formData[field].map((val, idx) => (
-                                                            <Box
-                                                                key={idx}
-                                                                display="flex"
-                                                                alignItems="center"
-                                                                gap={1}
-                                                                sx={{ mb: 1 }}
-                                                            >
+                                                            <Box key={idx} display="flex" alignItems="center" gap={1} sx={{ mb: 1 }}>
                                                                 <TextField
                                                                     label={`${field.slice(0, -1)} ${idx + 1}`}
                                                                     fullWidth
                                                                     value={val}
-                                                                    onChange={(e) =>
-                                                                        handleArrayChange(field, idx, e.target.value)
-                                                                    }
+                                                                    onChange={(e) => handleArrayChange(field, idx, e.target.value)}
                                                                 />
-                                                                <IconButton
-                                                                    color="error"
-                                                                    onClick={() => removeMember(field, idx)}
-                                                                >
+                                                                <IconButton color="error" onClick={() => removeMember(field, idx)}>
                                                                     <Remove />
                                                                 </IconButton>
                                                             </Box>
                                                         ))}
-                                                        <Button
-                                                            variant="outlined"
-                                                            startIcon={<Add />}
-                                                            onClick={() => addMember(field)}
-                                                        >
+                                                        <Button variant="outlined" startIcon={<Add />} onClick={() => addMember(field)}>
                                                             Add {field.slice(0, -1)}
                                                         </Button>
                                                     </Box>
@@ -301,19 +310,19 @@ export default function FamilyDetailsWow() {
                                 </Box>
                             )}
 
-                            {/* Step 3: Society / Loan */}
                             {activeStep === 2 && (
                                 <Box>
-                                    <Card sx={{ mb: 2 }}>
+                                    {/* Society Membership */}
+                                    <Card sx={{ mb: 2, borderLeft: "5px solid #4caf50" }}>
                                         <CardContent>
-                                            <Typography variant="h6">Family Member Society Membership</Typography>
-                                            <FormControl fullWidth sx={{ mt: 2 }}>
+                                            <Typography variant="h6" sx={{ mb: 1 }}>
+                                                <AccountBalance sx={{ mr: 1 }} /> Society Membership
+                                            </Typography>
+                                            <FormControl fullWidth>
                                                 <InputLabel>Yes / No</InputLabel>
                                                 <Select
                                                     value={formData.familyMemberSociety}
-                                                    onChange={(e) =>
-                                                        handleChange("familyMemberSociety", e.target.value)
-                                                    }
+                                                    onChange={(e) => handleChange("familyMemberSociety", e.target.value)}
                                                 >
                                                     <MenuItem value="Yes">Yes</MenuItem>
                                                     <MenuItem value="No">No</MenuItem>
@@ -325,24 +334,23 @@ export default function FamilyDetailsWow() {
                                                     fullWidth
                                                     sx={{ mt: 2 }}
                                                     value={formData.societyDetails}
-                                                    onChange={(e) =>
-                                                        handleChange("societyDetails", e.target.value)
-                                                    }
+                                                    onChange={(e) => handleChange("societyDetails", e.target.value)}
                                                 />
                                             )}
                                         </CardContent>
                                     </Card>
 
-                                    <Card>
+                                    {/* Loan */}
+                                    <Card sx={{ mb: 2, borderLeft: "5px solid #9c27b0" }}>
                                         <CardContent>
-                                            <Typography variant="h6">Family Member Loan from Society</Typography>
-                                            <FormControl fullWidth sx={{ mt: 2 }}>
+                                            <Typography variant="h6" sx={{ mb: 1 }}>
+                                                <AccountBalance sx={{ mr: 1 }} /> Loan
+                                            </Typography>
+                                            <FormControl fullWidth>
                                                 <InputLabel>Yes / No</InputLabel>
                                                 <Select
                                                     value={formData.familyMemberLoan}
-                                                    onChange={(e) =>
-                                                        handleChange("familyMemberLoan", e.target.value)
-                                                    }
+                                                    onChange={(e) => handleChange("familyMemberLoan", e.target.value)}
                                                 >
                                                     <MenuItem value="Yes">Yes</MenuItem>
                                                     <MenuItem value="No">No</MenuItem>
@@ -354,9 +362,7 @@ export default function FamilyDetailsWow() {
                                                     fullWidth
                                                     sx={{ mt: 2 }}
                                                     value={formData.loanDetails}
-                                                    onChange={(e) =>
-                                                        handleChange("loanDetails", e.target.value)
-                                                    }
+                                                    onChange={(e) => handleChange("loanDetails", e.target.value)}
                                                 />
                                             )}
                                         </CardContent>
@@ -364,93 +370,75 @@ export default function FamilyDetailsWow() {
                                 </Box>
                             )}
 
-                            {/* Step 4: Review */}
                             {activeStep === 3 && (
                                 <Box>
-                                    <Typography variant="h6" gutterBottom>
+                                    <Typography variant="h5" gutterBottom>
                                         Review Your Details
                                     </Typography>
                                     <Divider sx={{ mb: 2 }} />
 
                                     <Grid container spacing={2}>
                                         <Grid item xs={6}>
-                                            <Card>
+                                            <Card sx={{ borderLeft: "5px solid #1976d2" }}>
                                                 <CardContent>
-                                                    <Typography variant="subtitle2">Borrower Name</Typography>
+                                                    <Typography variant="subtitle1">Borrower</Typography>
                                                     <Typography>{formData.borrowerName}</Typography>
+                                                    <Typography>{formData.mobile}</Typography>
                                                 </CardContent>
                                             </Card>
                                         </Grid>
+
                                         <Grid item xs={6}>
-                                            <Card>
+                                            <Card sx={{ borderLeft: "5px solid #f50057" }}>
                                                 <CardContent>
-                                                    <Typography variant="subtitle2">Mobile</Typography>
-                                                    <Typography>{formData.mobile}</Typography>
+                                                    <Typography variant="subtitle1">Parents</Typography>
+                                                    <Typography>Father/Spouse: {formData.fatherSpouse}</Typography>
+                                                    <Typography>Mobile: {formData.fatherMobile}</Typography>
+                                                    <Typography>Email: {formData.fatherEmail}</Typography>
+                                                    <Typography>Mother: {formData.mother}</Typography>
                                                 </CardContent>
                                             </Card>
                                         </Grid>
                                     </Grid>
 
                                     <Grid container spacing={2} sx={{ mt: 2 }}>
+                                        {["children", "brothers", "sisters"].map(
+                                            (field) =>
+                                                formData[field].length > 0 && (
+                                                    <Grid item xs={12} key={field}>
+                                                        <Card sx={{ borderLeft: "5px solid #ff9800" }}>
+                                                            <CardContent>
+                                                                <Typography variant="subtitle1">
+                                                                    {field.charAt(0).toUpperCase() + field.slice(1)}
+                                                                </Typography>
+                                                                <Typography>{formData[field].join(", ")}</Typography>
+                                                            </CardContent>
+                                                        </Card>
+                                                    </Grid>
+                                                )
+                                        )}
+                                    </Grid>
+
+                                    <Grid container spacing={2} sx={{ mt: 2 }}>
                                         <Grid item xs={6}>
-                                            <Card>
+                                            <Card sx={{ borderLeft: "5px solid #4caf50" }}>
                                                 <CardContent>
-                                                    <Typography variant="subtitle2">Father / Spouse</Typography>
-                                                    <Typography>{formData.fatherSpouse}</Typography>
-                                                    <Typography>{formData.fatherMobile}</Typography>
-                                                    <Typography>{formData.fatherEmail}</Typography>
+                                                    <Typography variant="subtitle1">Society Membership</Typography>
+                                                    <Typography>{formData.familyMemberSociety}</Typography>
+                                                    <Typography>{formData.societyDetails}</Typography>
                                                 </CardContent>
                                             </Card>
                                         </Grid>
                                         <Grid item xs={6}>
-                                            <Card>
+                                            <Card sx={{ borderLeft: "5px solid #9c27b0" }}>
                                                 <CardContent>
-                                                    <Typography variant="subtitle2">Mother</Typography>
-                                                    <Typography>{formData.mother}</Typography>
+                                                    <Typography variant="subtitle1">Loan</Typography>
+                                                    <Typography>{formData.familyMemberLoan}</Typography>
+                                                    <Typography>{formData.loanDetails}</Typography>
                                                 </CardContent>
                                             </Card>
                                         </Grid>
                                     </Grid>
-
-                                    {["children", "brothers", "sisters"].map((field) =>
-                                        formData[field].length > 0 ? (
-                                            <Box key={field} sx={{ mt: 2 }}>
-                                                <Typography variant="subtitle1" gutterBottom>
-                                                    {field.charAt(0).toUpperCase() + field.slice(1)}
-                                                </Typography>
-                                                <Grid container spacing={2}>
-                                                    {formData[field].map((val, idx) => (
-                                                        <Grid item xs={6} key={idx}>
-                                                            <Card>
-                                                                <CardContent>
-                                                                    <Typography>{val}</Typography>
-                                                                </CardContent>
-                                                            </Card>
-                                                        </Grid>
-                                                    ))}
-                                                </Grid>
-                                            </Box>
-                                        ) : null
-                                    )}
-
-                                    <Box sx={{ mt: 2 }}>
-                                        <Card>
-                                            <CardContent>
-                                                <Typography variant="subtitle2">Society Membership</Typography>
-                                                <Typography>{formData.familyMemberSociety}</Typography>
-                                                <Typography>{formData.societyDetails}</Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Box>
-                                    <Box sx={{ mt: 2 }}>
-                                        <Card>
-                                            <CardContent>
-                                                <Typography variant="subtitle2">Loan</Typography>
-                                                <Typography>{formData.familyMemberLoan}</Typography>
-                                                <Typography>{formData.loanDetails}</Typography>
-                                            </CardContent>
-                                        </Card>
-                                    </Box>
                                 </Box>
                             )}
                         </motion.div>
@@ -462,7 +450,7 @@ export default function FamilyDetailsWow() {
                         </Button>
                         {activeStep === steps.length - 1 ? (
                             <Button variant="contained" onClick={handleSubmit}>
-                                Submit
+                                {editingIndex !== null ? "Update" : "Submit"}
                             </Button>
                         ) : (
                             <Button variant="contained" onClick={handleNext}>
@@ -471,6 +459,42 @@ export default function FamilyDetailsWow() {
                         )}
                     </Box>
                 </Paper>
+
+                {/* Submitted Forms List */}
+                <Box sx={{ mt: 5 }}>
+                    <Typography variant="h5" gutterBottom>
+                        Submitted Family Details
+                    </Typography>
+                    {submissions.length === 0 ? (
+                        <Typography>No submissions yet.</Typography>
+                    ) : (
+                        submissions.map((sub, idx) => (
+                            <Card key={idx} sx={{ mb: 2 }}>
+                                <CardContent>
+                                    <Grid container spacing={2} alignItems="center">
+                                        <Grid item xs={10}>
+                                            <Typography variant="subtitle1">Borrower: {sub.borrowerName}</Typography>
+                                            <Typography>Father: {sub.fatherSpouse}</Typography>
+                                            <Typography>Mother: {sub.mother}</Typography>
+                                        </Grid>
+                                        <Grid item xs={2}>
+                                            <Tooltip title="Edit">
+                                                <IconButton color="primary" onClick={() => handleEdit(idx)}>
+                                                    <Edit />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Delete">
+                                                <IconButton color="error" onClick={() => handleDelete(idx)}>
+                                                    <Delete />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </Grid>
+                                    </Grid>
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
+                </Box>
             </Container>
         </Box>
     );

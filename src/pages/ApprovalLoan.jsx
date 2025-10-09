@@ -1,3 +1,4 @@
+// src/pages/ApprovalWorkflow.jsx
 import React, { useState, useEffect } from "react";
 import {
     Container,
@@ -24,6 +25,8 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export default function ApprovalWorkflow() {
     const [loans, setLoans] = useState([]);
@@ -37,11 +40,18 @@ export default function ApprovalWorkflow() {
         loadLoans();
     }, []);
 
+    const formatLoanId = (id) => {
+        if (typeof id === "string" && id.startsWith("LOAN")) return id;
+        const num = String(id).replace(/\D/g, "");
+        return `LOAN${num.padStart(3, "0")}`;
+    };
+
     const loadLoans = () => {
         const members = JSON.parse(localStorage.getItem("members") || "[]");
         const allLoans = members.flatMap((m) =>
-            (m.loans || []).map((loan) => ({
+            (m.loans || []).map((loan, index) => ({
                 ...loan,
+                loanId: formatLoanId(loan.loanId || index + 1),
                 memberId: m.memberId,
                 memberName: m.name,
                 mobile: m.mobile || "-",
@@ -61,13 +71,11 @@ export default function ApprovalWorkflow() {
         localStorage.setItem("members", JSON.stringify(updatedMembers));
     };
 
-    // 🟢 Approve Loan & Generate Repayment Schedule
     const handleApprove = () => {
         const updatedLoans = loans.map((loan) => {
             if (loan.loanId === selectedLoanId) {
                 const now = new Date();
-                const startMonth = new Date(now.getFullYear(), now.getMonth() + 1, 5); // 5th next month
-
+                const startMonth = new Date(now.getFullYear(), now.getMonth() + 1, 5);
                 const repayments = Array.from({ length: loan.tenureMonths }, (_, i) => {
                     const date = new Date(
                         startMonth.getFullYear(),
@@ -78,7 +86,7 @@ export default function ApprovalWorkflow() {
                         date: date.toISOString().split("T")[0],
                         amount: parseFloat(loan.emi),
                         paid: false,
-                        paidOn: null, // new field added
+                        paidOn: null,
                     };
                 });
 
@@ -116,7 +124,6 @@ export default function ApprovalWorkflow() {
         setSelectedLoanId(null);
     };
 
-    // 🧾 Repayment Handling
     const handleOpenRepayment = (loan) => {
         setSelectedLoan(loan);
         setRepaymentDialogOpen(true);
@@ -128,7 +135,9 @@ export default function ApprovalWorkflow() {
                 const repayments = [...loan.repayments];
                 if (!repayments[repayIndex].paid) {
                     repayments[repayIndex].paid = true;
-                    repayments[repayIndex].paidOn = new Date().toISOString().split("T")[0]; // ✅ store date when paid
+                    repayments[repayIndex].paidOn = new Date()
+                        .toISOString()
+                        .split("T")[0];
                 }
 
                 const totalPaid = repayments
@@ -189,13 +198,129 @@ export default function ApprovalWorkflow() {
     const filteredLoans =
         filter === "all" ? loans : loans.filter((loan) => loan.status === filter);
 
+    const handleGeneratePDF = () => {
+        if (!selectedLoan) return;
+
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // HEADER BAR
+        doc.setFillColor(40, 53, 147);
+        doc.rect(0, 0, pageWidth, 30, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.text("Loan Repayment Report", pageWidth / 2, 20, { align: "center" });
+
+        // DETAILS BOX
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+
+        const startY = 40;
+        const leftX = 16;
+        const rightX = pageWidth / 2 + 10;
+        const lineGap = 6;
+
+        const info = [
+            ["Loan ID", selectedLoan.loanId],
+            ["Member", selectedLoan.memberName],
+            ["Mobile", selectedLoan.mobile],
+            ["Principal", `${selectedLoan.principal}`],
+            ["Interest", `${selectedLoan.interest}%`],
+            ["Tenure", `${selectedLoan.tenureMonths} months`],
+            ["EMI", `${selectedLoan.emi}`],
+            ["Total Payable", `${selectedLoan.totalPayable}`],
+            ["Outstanding", `${selectedLoan.outstanding?.toFixed(2)}`],
+        ];
+
+        const leftCol = info.slice(0, 5);
+        const rightCol = info.slice(5);
+
+        // calculate height for rectangle
+        const boxHeight = Math.max(leftCol.length, rightCol.length) * lineGap + 15;
+        doc.setDrawColor(180);
+        doc.roundedRect(12, startY - 5, pageWidth - 24, boxHeight, 3, 3);
+
+        // Draw left column
+        let y = startY + 10;
+        leftCol.forEach(([label, value]) => {
+            doc.setFont("helvetica", "bold");
+            doc.text(`${label}:`, leftX, y);
+            doc.setFont("helvetica", "normal");
+            // no padding gaps — align just after label
+            const labelWidth = doc.getTextWidth(`${label}: `);
+            doc.text(String(value), leftX + labelWidth + 2, y);
+            y += lineGap;
+        });
+
+        // Draw right column
+        y = startY + 10;
+        rightCol.forEach(([label, value]) => {
+            doc.setFont("helvetica", "bold");
+            doc.text(`${label}:`, rightX, y);
+            doc.setFont("helvetica", "normal");
+            const labelWidth = doc.getTextWidth(`${label}: `);
+            doc.text(String(value), rightX + labelWidth + 2, y);
+            y += lineGap;
+        });
+
+        // TABLE
+        const tableStartY = startY + boxHeight + 10;
+        const today = new Date().toISOString().split("T")[0];
+        const tableData = selectedLoan.repayments.map((r, i) => {
+            const missed = !r.paid && new Date(today) > new Date(r.date);
+            const status = r.paid
+                ? `Paid (${r.paidOn})`
+                : missed
+                    ? "Missed"
+                    : "Pending";
+            return [i + 1, r.date, `${r.amount}`, status];
+        });
+
+        autoTable(doc, {
+            startY: tableStartY,
+            head: [["#", "Due Date", "Amount", "Status"]],
+            body: tableData,
+            theme: "grid",
+            styles: { halign: "center", valign: "middle", fontSize: 11 },
+            headStyles: {
+                fillColor: [40, 53, 147],
+                textColor: 255,
+                fontStyle: "bold",
+            },
+            alternateRowStyles: { fillColor: [245, 245, 245] },
+            didParseCell: (data) => {
+                if (data.section === "body") {
+                    const status = data.row.raw[3];
+                    if (status.includes("Paid")) data.cell.styles.textColor = [0, 128, 0];
+                    else if (status.includes("Missed")) data.cell.styles.textColor = [200, 0, 0];
+                    else data.cell.styles.textColor = [180, 140, 0];
+                }
+            },
+        });
+
+        // FOOTER
+        const finalY = doc.lastAutoTable.finalY || tableStartY + 20;
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(
+            `Generated on ${today} | Loan Management System`,
+            pageWidth / 2,
+            finalY + 10,
+            { align: "center" }
+        );
+
+        doc.save(`Loan_${selectedLoan.loanId}_Repayment.pdf`);
+    };
+
+
     return (
         <Container maxWidth="xl" sx={{ mt: 4 }}>
             <Typography variant="h4" sx={{ mb: 2, fontWeight: 700 }}>
                 Loan Approval Workflow
             </Typography>
 
-            {/* Filter Buttons */}
             <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
                 {["all", "pending", "approved", "rejected"].map((f) => (
                     <Button
@@ -234,6 +359,7 @@ export default function ApprovalWorkflow() {
                             <TableCell sx={{ color: "white" }}>Actions</TableCell>
                         </TableRow>
                     </TableHead>
+
                     <TableBody>
                         {filteredLoans.length === 0 ? (
                             <TableRow>
@@ -261,12 +387,17 @@ export default function ApprovalWorkflow() {
                                     <TableCell>
                                         {loan.status === "pending" ? (
                                             <>
-                                                <IconButton onClick={(e) => handleMenuOpen(e, loan.loanId)}>
+                                                <IconButton
+                                                    onClick={(e) => handleMenuOpen(e, loan.loanId)}
+                                                >
                                                     <MoreVertIcon />
                                                 </IconButton>
                                                 <Menu
                                                     anchorEl={anchorEl}
-                                                    open={Boolean(anchorEl) && selectedLoanId === loan.loanId}
+                                                    open={
+                                                        Boolean(anchorEl) &&
+                                                        selectedLoanId === loan.loanId
+                                                    }
                                                     onClose={handleClose}
                                                 >
                                                     <MenuItem onClick={handleApprove}>Approve</MenuItem>
@@ -282,7 +413,9 @@ export default function ApprovalWorkflow() {
                                                 Manage Repayment
                                             </Button>
                                         ) : (
-                                            <Typography sx={{ fontSize: "0.8rem", color: "text.secondary" }}>
+                                            <Typography
+                                                sx={{ fontSize: "0.8rem", color: "text.secondary" }}
+                                            >
                                                 No Actions
                                             </Typography>
                                         )}
@@ -294,55 +427,89 @@ export default function ApprovalWorkflow() {
                 </Table>
             </Paper>
 
-            {/* 💰 Repayment Dialog */}
             {selectedLoan && (
-                <Dialog open={repaymentDialogOpen} onClose={handleCloseDialog} fullWidth maxWidth="sm">
-                    <DialogTitle>Repayment Schedule for Loan {selectedLoan.loanId}</DialogTitle>
+                <Dialog
+                    open={repaymentDialogOpen}
+                    onClose={handleCloseDialog}
+                    fullWidth
+                    maxWidth="sm"
+                >
+                    <DialogTitle>
+                        Repayment Schedule for {selectedLoan.loanId}
+                    </DialogTitle>
                     <DialogContent>
                         {selectedLoan.repayments && selectedLoan.repayments.length > 0 ? (
-                            selectedLoan.repayments.map((r, index) => (
-                                <Box
-                                    key={index}
-                                    sx={{
-                                        display: "flex",
-                                        justifyContent: "space-between",
-                                        alignItems: "center",
-                                        mb: 1,
-                                        p: 1,
-                                        borderRadius: 2,
-                                        backgroundColor: r.paid ? "#e8f5e9" : "#fffde7",
-                                    }}
-                                >
-                                    <Box>
-                                        <Typography>
-                                            {r.date} — ₹{r.amount}
-                                        </Typography>
-                                        {r.paid && r.paidOn && (
-                                            <Typography variant="caption" color="text.secondary">
-                                                Paid on: {r.paidOn}
+                            selectedLoan.repayments.map((r, index) => {
+                                const today = new Date().toISOString().split("T")[0];
+                                const missed = !r.paid && new Date(today) > new Date(r.date);
+                                return (
+                                    <Box
+                                        key={index}
+                                        sx={{
+                                            display: "flex",
+                                            justifyContent: "space-between",
+                                            alignItems: "center",
+                                            mb: 1,
+                                            p: 1,
+                                            borderRadius: 2,
+                                            backgroundColor: r.paid
+                                                ? "#e8f5e9"
+                                                : missed
+                                                    ? "#ffebee"
+                                                    : "#fffde7",
+                                        }}
+                                    >
+                                        <Box>
+                                            <Typography>
+                                                {r.date} — ₹{r.amount}
                                             </Typography>
+                                            {r.paid && r.paidOn && (
+                                                <Typography
+                                                    variant="caption"
+                                                    color="text.secondary"
+                                                >
+                                                    Paid on: {r.paidOn}
+                                                </Typography>
+                                            )}
+                                            {missed && !r.paid && (
+                                                <Typography
+                                                    variant="caption"
+                                                    color="error"
+                                                    sx={{ fontWeight: 600 }}
+                                                >
+                                                    Missed Payment
+                                                </Typography>
+                                            )}
+                                        </Box>
+                                        {r.paid ? (
+                                            <Chip label="Paid" color="success" size="small" />
+                                        ) : missed ? (
+                                            <Chip label="Missed" color="error" size="small" />
+                                        ) : (
+                                            <Button
+                                                variant="contained"
+                                                color="success"
+                                                size="small"
+                                                onClick={() => handleMarkPaid(index)}
+                                            >
+                                                Mark Paid
+                                            </Button>
                                         )}
                                     </Box>
-
-                                    {r.paid ? (
-                                        <Chip label="Paid" color="success" size="small" />
-                                    ) : (
-                                        <Button
-                                            variant="contained"
-                                            color="success"
-                                            size="small"
-                                            onClick={() => handleMarkPaid(index)}
-                                        >
-                                            Mark Paid
-                                        </Button>
-                                    )}
-                                </Box>
-                            ))
+                                );
+                            })
                         ) : (
                             <Typography>No repayments found.</Typography>
                         )}
                     </DialogContent>
                     <DialogActions>
+                        <Button
+                            onClick={handleGeneratePDF}
+                            variant="contained"
+                            color="primary"
+                        >
+                            View PDF
+                        </Button>
                         <Button onClick={handleCloseDialog}>Close</Button>
                     </DialogActions>
                 </Dialog>
