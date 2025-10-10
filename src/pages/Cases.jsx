@@ -17,11 +17,15 @@ import {
     IconButton,
 } from "@mui/material";
 import { Edit, Delete } from "@mui/icons-material";
-
+import memberData from "../../public/Member.json";
+import { Autocomplete } from "@mui/material";
 export default function CaseFormDetail() {
     const [activeForm, setActiveForm] = useState("");
+    const [searchMember, setSearchMember] = useState("");
+
     const [openForm, setOpenForm] = useState(false);
     const [editId, setEditId] = useState(null);
+    const [members, setMembers] = useState([]);
 
     const generateId = () => Date.now() + "-" + Math.floor(Math.random() * 10000);
 
@@ -44,6 +48,7 @@ export default function CaseFormDetail() {
     }, [casesRCS]);
 
     const [form138, setForm138] = useState({
+        selectedMember: "",
         caseNo: "",
         filingDate: "",
         courtName: "",
@@ -79,6 +84,7 @@ export default function CaseFormDetail() {
         }
 
         setForm138({
+            selectedMember: "",
             caseNo: "",
             filingDate: "",
             courtName: "",
@@ -95,6 +101,7 @@ export default function CaseFormDetail() {
     };
 
     const [formRCS, setFormRCS] = useState({
+        selectedMember: "",
         borrowerName: "",
         address: "",
         pan: "",
@@ -134,6 +141,7 @@ export default function CaseFormDetail() {
         }
 
         setFormRCS({
+            selectedMember: "",
             borrowerName: "",
             address: "",
             pan: "",
@@ -181,6 +189,17 @@ export default function CaseFormDetail() {
         setEditId(caseData.id);
     };
 
+    // Load member data
+    useEffect(() => {
+        const stored = localStorage.getItem("members");
+        if (stored) {
+            setMembers(JSON.parse(stored));
+        } else {
+            setMembers(memberData);
+            localStorage.setItem("members", JSON.stringify(memberData));
+        }
+    }, []);
+
     return (
         <Container maxWidth="md">
             <Box textAlign="center" mt={4}>
@@ -211,16 +230,25 @@ export default function CaseFormDetail() {
                     >
                         Add RCS Case
                     </Button>
+                    <Button
+                        variant="contained"
+                        color="success"
+                        onClick={() => {
+                            setActiveForm("showCases");
+                            setOpenForm(true);
+                        }}
+                    >
+                        Show Cases
+                    </Button>
+
                 </Box>
             </Box>
 
-            {/* 138 FORM (unchanged logic) */}
+            {/* ------------------ 138 FORM ------------------ */}
             {openForm && activeForm === "138" && (
                 <Paper elevation={3} sx={{ p: 4, borderRadius: 2, mt: 4 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
-                        <Typography variant="h6">
-                            DETAILS OF CASE UNDER SECTION 138
-                        </Typography>
+                        <Typography variant="h6">DETAILS OF CASE UNDER SECTION 138</Typography>
                         <Button onClick={() => setOpenForm(false)} color="error">
                             Close
                         </Button>
@@ -228,6 +256,29 @@ export default function CaseFormDetail() {
 
                     <form onSubmit={handleSubmit138}>
                         <Grid container spacing={2} mt={1}>
+                            {/* Select Member Dropdown */}
+                            <Grid item xs={4}>
+                                <Typography>Select Member</Typography>
+                            </Grid>
+                            <Grid item xs={8}>
+                                <TextField
+                                    select
+                                    fullWidth
+                                    name="selectedMember"
+                                    value={form138.selectedMember}
+                                    onChange={handleChange138}
+                                    variant="outlined"
+                                    size="small"
+                                >
+                                    {members.map((m, i) => (
+                                        <MenuItem key={i} value={m.name || m.memberName}>
+                                            {m.name || m.memberName}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                            </Grid>
+
+                            {/* Other Fields */}
                             {[
                                 { label: "Case No.", name: "caseNo" },
                                 { label: "Date of Filing", name: "filingDate", type: "date" },
@@ -320,7 +371,7 @@ export default function CaseFormDetail() {
                 </Paper>
             )}
 
-            {/* RCS FORM (unchanged logic) */}
+            {/* ------------------ RCS FORM ------------------ */}
             {openForm && activeForm === "RCS" && (
                 <Paper elevation={3} sx={{ p: 4, borderRadius: 2, mt: 4 }}>
                     <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -332,6 +383,28 @@ export default function CaseFormDetail() {
 
                     <form onSubmit={handleSubmitRCS}>
                         <Grid container spacing={2} mt={1}>
+                            {/* Select Member Dropdown */}
+                            <Grid item xs={4}>
+                                <Typography>Select Member</Typography>
+                            </Grid>
+                            <Grid item xs={8}>
+                                <TextField
+                                    select
+                                    fullWidth
+                                    name="selectedMember"
+                                    value={formRCS.selectedMember}
+                                    onChange={handleChangeRCS}
+                                    variant="outlined"
+                                    size="small"
+                                >
+                                    {members.map((m, i) => (
+                                        <MenuItem key={i} value={m.name || m.memberName}>
+                                            {m.name || m.memberName}
+                                        </MenuItem>
+                                    ))}
+                                </TextField>
+                            </Grid>
+
                             {[
                                 { label: "Name of Borrower & Membership No.", name: "borrowerName" },
                                 { label: "Address", name: "address" },
@@ -408,8 +481,131 @@ export default function CaseFormDetail() {
                 </Paper>
             )}
 
-            {/* ---------- Section 138 TABLE (Stylish + Bold Headers) ---------- */}
-            {cases138.length > 0 && (
+
+            {/* ---------- SHOW ALL CASES BY MEMBER WITH SEARCH ---------- */}
+            {openForm && activeForm === "showCases" && (
+                <Paper elevation={3} sx={{ p: 4, borderRadius: 2, mt: 4 }}>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                        <Typography variant="h6">All Members & Their Cases</Typography>
+                        <Button onClick={() => setOpenForm(false)} color="error">
+                            Close
+                        </Button>
+                    </Box>
+
+                    {/* Autocomplete Search */}
+                    <Box mb={3}>
+                        <Autocomplete
+                            options={members.map((m) => m.name || m.memberName)}
+                            value={searchMember}
+                            onChange={(event, newValue) => setSearchMember(newValue || "")}
+                            renderInput={(params) => (
+                                <TextField
+                                    {...params}
+                                    variant="outlined"
+                                    size="small"
+                                    placeholder="Search member by name..."
+                                />
+                            )}
+                            freeSolo
+                        />
+                    </Box>
+
+                    {members
+                        .filter((m) => {
+                            const memberName = m.name || m.memberName;
+                            return memberName.toLowerCase().includes(searchMember.toLowerCase());
+                        })
+                        .map((m) => {
+                            const memberName = m.name || m.memberName;
+                            const memberCases138 = cases138.filter(
+                                (c) => c.selectedMember === memberName
+                            );
+                            const memberCasesRCS = casesRCS.filter(
+                                (r) => r.selectedMember === memberName
+                            );
+
+                            if (memberCases138.length === 0 && memberCasesRCS.length === 0) return null;
+
+                            return (
+                                <Box
+                                    key={memberName}
+                                    sx={{
+                                        mt: 3,
+                                        border: "1px solid #ddd",
+                                        borderRadius: 2,
+                                        p: 2,
+                                        backgroundColor: "#fafafa",
+                                    }}
+                                >
+                                    <Typography variant="h6" color="primary">
+                                        {memberName}
+                                    </Typography>
+
+                                    {memberCases138.length > 0 && (
+                                        <Box mt={2}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+                                                Section 138 Cases
+                                            </Typography>
+                                            <Table size="small">
+                                                <TableHead>
+                                                    <TableRow>
+                                                        <TableCell>Case No.</TableCell>
+                                                        <TableCell>Case Name</TableCell>
+                                                        <TableCell>Court</TableCell>
+                                                        <TableCell>Status</TableCell>
+                                                    </TableRow>
+                                                </TableHead>
+                                                <TableBody>
+                                                    {memberCases138.map((c) => (
+                                                        <TableRow key={c.id}>
+                                                            <TableCell>{c.caseNo}</TableCell>
+                                                            <TableCell>{c.caseName}</TableCell>
+                                                            <TableCell>{c.courtName}</TableCell>
+                                                            <TableCell>{c.status || "N/A"}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </Box>
+                                    )}
+
+                                    {memberCasesRCS.length > 0 && (
+                                        <Box mt={3}>
+                                            <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
+                                                RCS Cases
+                                            </Typography>
+                                            <Table size="small">
+                                                <TableHead>
+                                                    <TableRow>
+                                                        <TableCell>RCS Case No.</TableCell>
+                                                        <TableCell>Borrower</TableCell>
+                                                        <TableCell>Award Amount</TableCell>
+                                                        <TableCell>Status</TableCell>
+                                                    </TableRow>
+                                                </TableHead>
+                                                <TableBody>
+                                                    {memberCasesRCS.map((r) => (
+                                                        <TableRow key={r.id}>
+                                                            <TableCell>{r.rcsCaseNo}</TableCell>
+                                                            <TableCell>{r.borrowerName}</TableCell>
+                                                            <TableCell>{r.awardAmount}</TableCell>
+                                                            <TableCell>{r.recoveryStatus || "N/A"}</TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </TableBody>
+                                            </Table>
+                                        </Box>
+                                    )}
+                                </Box>
+                            );
+                        })}
+                </Paper>
+            )}
+
+
+
+            {/* ---------- Section 138 TABLE ---------- */}
+            {activeForm !== "showCases" && cases138.length > 0 && (
                 <Paper elevation={4} sx={{ mt: 4, borderRadius: 3, overflow: "hidden" }}>
                     <Box
                         sx={{
@@ -427,6 +623,7 @@ export default function CaseFormDetail() {
                         <TableHead sx={{ backgroundColor: "#e3f2fd" }}>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>Member</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Case No.</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Case Name</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Court</TableCell>
@@ -446,6 +643,7 @@ export default function CaseFormDetail() {
                                     }}
                                 >
                                     <TableCell>{c.id}</TableCell>
+                                    <TableCell>{c.selectedMember || "N/A"}</TableCell>
                                     <TableCell>{c.caseNo}</TableCell>
                                     <TableCell>{c.caseName}</TableCell>
                                     <TableCell>{c.courtName}</TableCell>
@@ -477,8 +675,8 @@ export default function CaseFormDetail() {
                 </Paper>
             )}
 
-            {/* ---------- RCS TABLE (Stylish + Bold Headers) ---------- */}
-            {casesRCS.length > 0 && (
+            {/* ---------- RCS TABLE ---------- */}
+            {activeForm !== "showCases" && casesRCS.length > 0 && (
                 <Paper elevation={4} sx={{ mt: 4, borderRadius: 3, overflow: "hidden" }}>
                     <Box
                         sx={{
@@ -496,10 +694,11 @@ export default function CaseFormDetail() {
                         <TableHead sx={{ backgroundColor: "#fff3e0" }}>
                             <TableRow>
                                 <TableCell sx={{ fontWeight: "bold" }}>ID</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Borrower Name</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>Member</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>Borrower</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>RCS Case No.</TableCell>
-                                <TableCell sx={{ fontWeight: "bold" }}>Balance</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Award Amount</TableCell>
+                                <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
                                 <TableCell sx={{ fontWeight: "bold" }}>Actions</TableCell>
                             </TableRow>
                         </TableHead>
@@ -515,10 +714,23 @@ export default function CaseFormDetail() {
                                     }}
                                 >
                                     <TableCell>{r.id}</TableCell>
+                                    <TableCell>{r.selectedMember || "N/A"}</TableCell>
                                     <TableCell>{r.borrowerName}</TableCell>
                                     <TableCell>{r.rcsCaseNo}</TableCell>
-                                    <TableCell>{r.balance}</TableCell>
                                     <TableCell>{r.awardAmount}</TableCell>
+                                    <TableCell>
+                                        <Chip
+                                            label={r.recoveryStatus || "N/A"}
+                                            color={
+                                                r.recoveryStatus?.includes("Recovered")
+                                                    ? "success"
+                                                    : r.recoveryStatus?.includes("Pending")
+                                                        ? "warning"
+                                                        : "error"
+                                            }
+                                            size="small"
+                                        />
+                                    </TableCell>
                                     <TableCell>
                                         <IconButton color="primary" onClick={() => handleEditRCS(r)}>
                                             <Edit />

@@ -1,4 +1,3 @@
-// src/pages/FamilyDetailsWow.jsx
 import React, { useState, useEffect } from "react";
 import {
     Box,
